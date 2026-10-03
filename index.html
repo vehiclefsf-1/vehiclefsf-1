@@ -139,6 +139,68 @@ tbody tr:nth-child(even){background:var(--row-alt);}
 .toast-info{background:color-mix(in srgb, var(--accent) 15%, var(--surface)); color:var(--ink); border:1px solid var(--accent);}
 .toast-ok{background:color-mix(in srgb, var(--accent) 22%, var(--surface)); color:var(--ink); border:1px solid var(--accent);}
 .toast-err{background:color-mix(in srgb, var(--danger) 18%, var(--surface)); color:var(--ink); border:1px solid var(--danger);}
+/* ---------- Intro splash ---------- */
+#splash{
+  position:fixed; inset:0; z-index:100; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  background:radial-gradient(ellipse at 50% 40%, #1d4f47 0%, #0f2a26 55%, #0a1715 100%); color:#fff; overflow:hidden;
+  transition:opacity .6s ease, visibility .6s ease;
+}
+#splash.hide{opacity:0; visibility:hidden;}
+#splash .sp-glow{position:absolute; width:520px; height:520px; border-radius:50%;
+  background:radial-gradient(circle, rgba(217,178,92,.25), transparent 65%); animation:spPulse 2.8s ease-in-out infinite;}
+#splash .sp-road{position:relative; width:min(340px,80vw); height:120px; margin-bottom:10px;}
+#splash .sp-line{position:absolute; bottom:18px; left:0; right:0; height:3px; border-radius:3px;
+  background:linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent);
+  transform:scaleX(0); animation:spLine 1.2s .2s cubic-bezier(.2,.8,.2,1) forwards;}
+#splash .sp-dash{position:absolute; bottom:8px; left:0; right:0; height:2px; overflow:hidden; opacity:.6;}
+#splash .sp-dash::before{content:""; position:absolute; inset:0; width:200%;
+  background:repeating-linear-gradient(90deg, #D9B25C 0 18px, transparent 18px 36px); animation:spDash .6s linear infinite;}
+#splash .sp-car{position:absolute; bottom:20px; left:50%; width:118px; transform:translateX(-260%);
+  animation:spDrive 1.8s .4s cubic-bezier(.16,.9,.25,1) forwards; filter:drop-shadow(0 8px 14px rgba(0,0,0,.45));}
+#splash .sp-car .wheel{transform-box:fill-box; transform-origin:center; animation:spSpin .35s linear 5 .4s;}
+#splash .sp-title{font-size:clamp(20px,5vw,28px); font-weight:800; margin:6px 0 4px; opacity:0; transform:translateY(14px);
+  animation:spUp .9s 2s ease forwards; text-align:center; padding:0 16px;}
+#splash .sp-sub{font-size:14px; color:#D9B25C; font-weight:600; letter-spacing:.5px; opacity:0; transform:translateY(10px);
+  animation:spUp .9s 2.4s ease forwards;}
+#splash .sp-bar{width:140px; height:3px; border-radius:3px; background:rgba(255,255,255,.12); margin-top:22px; overflow:hidden; opacity:0; animation:spUp .5s 2.7s ease forwards;}
+#splash .sp-bar span{display:block; height:100%; width:0; background:linear-gradient(90deg,#3FA593,#D9B25C); animation:spFill 1.8s 2.8s ease forwards;}
+@keyframes spPulse{0%,100%{transform:scale(.9); opacity:.7} 50%{transform:scale(1.08); opacity:1}}
+@keyframes spLine{to{transform:scaleX(1)}}
+@keyframes spDash{to{transform:translateX(-36px)}}
+@keyframes spDrive{0%{transform:translateX(-260%)} 100%{transform:translateX(-50%)}}
+@keyframes spSpin{to{transform:rotate(360deg)}}
+@keyframes spUp{to{opacity:1; transform:none}}
+@keyframes spFill{to{width:100%}}
+@media (prefers-reduced-motion: reduce){
+  #splash *{animation-duration:.01s !important; animation-delay:0s !important;}
+}
+
+/* ---------- Image source chooser ---------- */
+.src-box{max-width:380px;}
+.src-box h3{margin:0 0 6px; font-size:16px;}
+.src-box p.hint{margin:0 0 14px; font-size:12.5px; color:var(--ink-soft);}
+.src-options{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;}
+.src-opt{display:flex; flex-direction:column; align-items:center; gap:8px; padding:18px 10px; border-radius:12px;
+  border:1px solid var(--border); background:var(--bg); color:var(--ink); font-size:14px; font-weight:700;}
+.src-opt:hover{border-color:var(--accent); background:color-mix(in srgb, var(--accent) 8%, var(--surface));}
+.src-opt .ic{font-size:30px; line-height:1;}
+.cam-video{width:100%; border-radius:10px; background:#000; max-height:60vh; display:block;}
+.cam-actions{display:flex; gap:8px; margin-top:12px; justify-content:center;}
+
+/* ---------- Governorate tabs ---------- */
+.gov-tabs{display:flex; gap:8px; overflow-x:auto; padding:2px 2px 10px; margin-bottom:6px; scrollbar-width:thin;}
+.gov-tab{flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:8px 14px; border-radius:99px;
+  border:1px solid var(--border); background:var(--surface); color:var(--ink); font-size:13.5px; font-weight:700;
+  transition:background .15s, border-color .15s, color .15s;}
+.gov-tab .n{font-size:11.5px; font-weight:700; min-width:22px; padding:1px 7px; border-radius:99px;
+  background:var(--row-alt); color:var(--ink-soft); text-align:center;}
+.gov-tab:hover{border-color:var(--accent);}
+.gov-tab.active{background:var(--accent); color:var(--accent-ink); border-color:var(--accent);}
+.gov-tab.active .n{background:color-mix(in srgb, var(--accent-ink) 22%, transparent); color:var(--accent-ink);}
+.gov-tab.zero{opacity:.55;}
+.gov-tab.hq{border-color:var(--gold);}
+.gov-tab.hq:not(.active) .lbl::before{content:"★ "; color:var(--gold);}
+
 @media (max-width:640px){
   .grid{grid-template-columns:1fr;}
   .table-scroll table{min-width:1100px;}
@@ -147,6 +209,60 @@ tbody tr:nth-child(even){background:var(--row-alt);}
 </style>
 </head>
 <body>
+
+<div id="splash" aria-hidden="true">
+  <div class="sp-glow"></div>
+  <div class="sp-road">
+    <svg class="sp-car" viewBox="0 0 120 52" xmlns="http://www.w3.org/2000/svg">
+      <defs><linearGradient id="spBody" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4FC3AE"/><stop offset="1" stop-color="#146356"/></linearGradient></defs>
+      <path d="M8 36 L12 26 Q14 22 20 21 L38 19 L50 9 Q53 7 58 7 L82 7 Q88 7 92 11 L102 20 L110 22 Q116 23 116 29 L116 36 Q116 39 113 39 L10 39 Q7 39 8 36 Z" fill="url(#spBody)"/>
+      <path d="M54 11 L80 11 Q85 11 88 14 L95 20 L44 20 Z" fill="#CFEDE7" opacity=".85"/>
+      <rect x="68" y="11" width="3" height="9" fill="#146356"/>
+      <rect x="108" y="25" width="6" height="4" rx="1.5" fill="#FFE29A"/>
+      <rect x="9" y="27" width="5" height="4" rx="1.5" fill="#E07256"/>
+      <g class="wheel"><circle cx="30" cy="40" r="9" fill="#111"/><circle cx="30" cy="40" r="4" fill="#bbb"/><rect x="29" y="32" width="2" height="16" fill="#555"/></g>
+      <g class="wheel"><circle cx="94" cy="40" r="9" fill="#111"/><circle cx="94" cy="40" r="4" fill="#bbb"/><rect x="93" y="32" width="2" height="16" fill="#555"/></g>
+    </svg>
+    <div class="sp-line"></div>
+    <div class="sp-dash"></div>
+  </div>
+  <div class="sp-title">سجل المركبات</div>
+  <div class="sp-sub">المنطقة الشرقية</div>
+  <div class="sp-bar"><span></span></div>
+</div>
+<script>
+(function(){
+  var sp = document.getElementById('splash');
+  var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function hide(){ sp.classList.add('hide'); setTimeout(function(){ sp.remove(); }, 700); }
+  setTimeout(hide, reduce ? 600 : 5000);
+  sp.addEventListener('click', hide);
+})();
+</script>
+
+<div class="modal-overlay" id="srcOverlay">
+  <div class="modal-box src-box">
+    <h3 id="srcTitle">إضافة صورة</h3>
+    <p class="hint" id="srcHint">اختر طريقة إضافة الصورة</p>
+    <div id="srcChoices">
+      <div class="src-options">
+        <button type="button" class="src-opt" id="srcCameraBtn"><span class="ic">📸</span>تصوير مباشر</button>
+        <button type="button" class="src-opt" id="srcPickBtn"><span class="ic" id="srcPickIcon">🖼️</span><span id="srcPickLabel">من الاستديو</span></button>
+      </div>
+    </div>
+    <div id="camLive" style="display:none;">
+      <video class="cam-video" id="camVideo" autoplay playsinline muted></video>
+      <div class="cam-actions">
+        <button type="button" class="btn-primary" id="camSnapBtn">📸 التقاط</button>
+      </div>
+    </div>
+    <div class="modal-actions" style="justify-content:flex-end; margin-top:6px;">
+      <button type="button" class="btn-ghost btn-sm" id="srcCancelBtn">إلغاء</button>
+    </div>
+  </div>
+</div>
+<input type="file" id="pickInput" accept="image/*" style="display:none;">
+<input type="file" id="liveInput" accept="image/*" capture="environment" style="display:none;">
 
 <div id="signinScreen">
   <div class="logo">🚗</div>
@@ -216,8 +332,6 @@ tbody tr:nth-child(even){background:var(--row-alt);}
         <button class="btn-primary" id="openAddBtn">+ إضافة يدوية</button>
       </span>
     </div>
-    <input type="file" id="cameraInput" accept="image/*" capture="environment">
-    <input type="file" id="attachInput" accept="image/*" capture="environment">
 
     <div class="io-row" style="margin-bottom:16px;">
       <button class="btn-ghost btn-sm" id="exportBtn">تصدير نسخة احتياطية (JSON)</button>
@@ -274,6 +388,8 @@ tbody tr:nth-child(even){background:var(--row-alt);}
         <button class="btn-ghost" id="cancelBtn">إلغاء</button>
       </div>
     </div>
+
+    <div class="gov-tabs" id="govTabs"></div>
 
     <div class="table-scroll">
       <table id="vTable">
@@ -423,27 +539,115 @@ function setFormThumb(dataUrl){
   if(formImageData){ img.src = formImageData; img.style.display='inline-block'; none.style.display='none'; }
   else { img.style.display='none'; none.style.display='inline'; }
 }
-document.getElementById('attachBtn').onclick = ()=> document.getElementById('attachInput').click();
-document.getElementById('attachInput').addEventListener('change', async e=>{
-  const file = e.target.files[0]; e.target.value='';
+/* ---------- image source chooser (live camera / gallery / device) ---------- */
+const IS_MOBILE = (window.matchMedia && matchMedia('(pointer:coarse)').matches) || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+let srcResolve = null, camStream = null;
+function stopCam(){
+  if(camStream){ camStream.getTracks().forEach(t=>t.stop()); camStream = null; }
+  document.getElementById('camVideo').srcObject = null;
+}
+function finishChoose(file){
+  stopCam();
+  document.getElementById('srcOverlay').classList.remove('open');
+  const r = srcResolve; srcResolve = null;
+  if(r) r(file || null);
+}
+function chooseImage(title, hint){
+  return new Promise(resolve=>{
+    srcResolve = resolve;
+    document.getElementById('srcTitle').textContent = title;
+    document.getElementById('srcHint').textContent = hint;
+    document.getElementById('srcPickIcon').textContent = IS_MOBILE ? '🖼️' : '💻';
+    document.getElementById('srcPickLabel').textContent = IS_MOBILE ? 'من الاستديو' : 'من الجهاز';
+    document.getElementById('srcChoices').style.display = '';
+    document.getElementById('camLive').style.display = 'none';
+    document.getElementById('srcOverlay').classList.add('open');
+  });
+}
+document.getElementById('srcPickBtn').onclick = ()=> document.getElementById('pickInput').click();
+document.getElementById('srcCameraBtn').onclick = async ()=>{
+  // الجوال: يفتح كاميرا الجهاز مباشرة. الكمبيوتر: يشغّل كاميرا الويب داخل الصفحة.
+  if(IS_MOBILE || !(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)){
+    document.getElementById('liveInput').click(); return;
+  }
+  try{
+    camStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment', width:{ideal:1920}, height:{ideal:1080}}, audio:false});
+    document.getElementById('camVideo').srcObject = camStream;
+    document.getElementById('srcChoices').style.display = 'none';
+    document.getElementById('camLive').style.display = '';
+  }catch(err){
+    showToast('تعذّر تشغيل الكاميرا. اسمح للمتصفح باستخدامها أو اختر صورة من الجهاز.', 'err');
+  }
+};
+document.getElementById('camSnapBtn').onclick = ()=>{
+  const video = document.getElementById('camVideo');
+  if(!video.videoWidth) return;
+  const c = document.createElement('canvas');
+  c.width = video.videoWidth; c.height = video.videoHeight;
+  c.getContext('2d').drawImage(video, 0, 0);
+  c.toBlob(blob=> finishChoose(blob), 'image/jpeg', 0.92);
+};
+document.getElementById('srcCancelBtn').onclick = ()=> finishChoose(null);
+['pickInput','liveInput'].forEach(id=>{
+  document.getElementById(id).addEventListener('change', e=>{
+    const file = e.target.files[0]; e.target.value = '';
+    if(file) finishChoose(file);
+  });
+});
+
+document.getElementById('attachBtn').onclick = async ()=>{
+  const file = await chooseImage('صورة الاستمارة', 'صوّر الاستمارة مباشرة أو اختر صورة محفوظة');
   if(!file) return;
   try{ setFormThumb(await compressImage(file, 900)); }
   catch(err){ showToast('تعذّر تحميل الصورة.', 'err'); }
-});
+};
 document.getElementById('formThumbPreview').onclick = ()=>{
   document.getElementById('lightboxImg').src = formImageData;
   document.getElementById('lightbox').classList.add('open');
 };
 document.getElementById('lightbox').onclick = ()=> document.getElementById('lightbox').classList.remove('open');
 
+/* ---------- governorate tabs ---------- */
+const NO_GOV = '__none__';
+let activeGov = 'all';
+function govOrder(g){ const i = GOV_LIST.indexOf(g); return i === -1 ? (g ? GOV_LIST.length : GOV_LIST.length + 1) : i; }
+function renderGovTabs(list){
+  const counts = {};
+  list.forEach(v=>{ const k = v.gov || NO_GOV; counts[k] = (counts[k]||0) + 1; });
+  const extra = Object.keys(counts).filter(k=> k !== NO_GOV && !GOV_LIST.includes(k));
+  const tabs = [{key:'all', label:'الكل', n:list.length}]
+    .concat(GOV_LIST.concat(extra).map(g=> ({key:g, label:g, n:counts[g]||0})));
+  if(counts[NO_GOV]) tabs.push({key:NO_GOV, label:'بدون محافظة', n:counts[NO_GOV]});
+  if(!tabs.some(t=> t.key === activeGov)) activeGov = 'all';
+  document.getElementById('govTabs').innerHTML = tabs.map(t=>{
+    const cls = ['gov-tab'];
+    if(t.key === activeGov) cls.push('active');
+    if(t.key !== 'all' && !t.n) cls.push('zero');
+    if(t.key === 'القيادة') cls.push('hq');
+    return `<button type="button" class="${cls.join(' ')}" data-gov="${esc(t.key)}"><span class="lbl">${esc(t.label)}</span><span class="n">${t.n}</span></button>`;
+  }).join('');
+}
+document.getElementById('govTabs').addEventListener('click', e=>{
+  const btn = e.target.closest('[data-gov]');
+  if(!btn) return;
+  activeGov = btn.getAttribute('data-gov');
+  render();
+});
+
 /* ---------- render ---------- */
 function render(){
   const q = document.getElementById('searchBox').value.trim().toLowerCase();
   const keys = ['gov','entity','status','regType','model','plateNum','plateLet','year','color','chassis','serial','form','notes'];
-  const list = vehicles.filter(v=>{
+  const searched = vehicles.filter(v=>{
     if(!q) return true;
     return keys.some(k => (v[k]||'').toString().toLowerCase().includes(q));
-  }).sort((a,b)=> (a.gov||'').localeCompare(b.gov||'','ar'));
+  });
+  renderGovTabs(searched);
+  const list = searched.filter(v=>{
+    if(activeGov === 'all') return true;
+    if(activeGov === NO_GOV) return !v.gov;
+    return v.gov === activeGov;
+  }).sort((a,b)=> govOrder(a.gov) - govOrder(b.gov) || (a.plateNum||'').localeCompare(b.plateNum||'','ar'));
 
   const body = document.getElementById('vBody');
   body.innerHTML = '';
@@ -465,7 +669,9 @@ function render(){
     img.onclick = ()=>{ document.getElementById('lightboxImg').src = img.src; document.getElementById('lightbox').classList.add('open'); };
   });
 
-  document.getElementById('countLabel').textContent = vehicles.length + ' مركبة' + (q ? ` (عرض ${list.length})` : '');
+  const filtered = q || activeGov !== 'all';
+  document.getElementById('countLabel').textContent = vehicles.length + ' مركبة' + (filtered ? ` (عرض ${list.length})` : '');
+  document.getElementById('govTabs').style.display = vehicles.length ? '' : 'none';
   document.getElementById('emptyState').style.display = vehicles.length ? 'none' : 'block';
   document.getElementById('vTable').style.display = vehicles.length ? '' : 'none';
 }
@@ -672,10 +878,11 @@ function extractFields(text){
   m = text.match(/(?:اللون)[:\s]{0,6}([^\n\r]{2,15})/); if(m) r.color = m[1].trim();
   return r;
 }
-document.getElementById('cameraBtn').onclick = ()=> document.getElementById('cameraInput').click();
-document.getElementById('cameraInput').addEventListener('change', async e=>{
-  const file = e.target.files[0]; e.target.value = '';
-  if(!file) return;
+document.getElementById('cameraBtn').onclick = async ()=>{
+  const file = await chooseImage('تصوير بطاقة البيانات', 'صوّر البطاقة مباشرة أو اختر صورة محفوظة، وبنقرأ بياناتها تلقائيًا');
+  if(file) processCardImage(file);
+};
+async function processCardImage(file){
   if(typeof Tesseract === 'undefined'){ showToast('تعذّر تحميل محرك القراءة. تحقق من الاتصال بالإنترنت.', 'err'); return; }
   showToast('جارٍ قراءة بطاقة البيانات...', 'info');
   try{
@@ -697,7 +904,7 @@ document.getElementById('cameraInput').addEventListener('change', async e=>{
     showToast('تمت إضافة المركبة من الصورة. راجع الحقول قبل الإغلاق.', 'ok');
     openPanel({id: ref.id, ...data});
   }catch(err){ showToast('تعذّرت قراءة الصورة، جرّب صورة أوضح أو أضف يدويًا.', 'err'); }
-});
+}
 
 /* ---------- Access management (admin sidebar) ---------- */
 document.getElementById('sidebarToggle').onclick = ()=>{
