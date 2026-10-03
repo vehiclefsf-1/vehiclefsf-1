@@ -205,7 +205,7 @@ tbody tr:nth-child(even){background:var(--row-alt);}
 
 @media (max-width:640px){
   .grid{grid-template-columns:1fr;}
-  .table-scroll table{min-width:1100px;}
+  .table-scroll table{min-width:1200px;}
   header{flex-direction:column; align-items:stretch;}
 }
 </style>
@@ -345,9 +345,12 @@ tbody tr:nth-child(even){background:var(--row-alt);}
         <div class="field"><label>المحافظة</label>
           <select id="f_gov"><option value=""></option></select>
         </div>
-        <div class="field"><label>اسم المستخدم / الجهة</label>
+        <div class="field"><label>الجهة</label>
           <input type="text" id="f_entity" list="entityList" placeholder="مثال: إدارة الصيانة">
           <datalist id="entityList"></datalist>
+        </div>
+        <div class="field"><label>اسم المستخدم</label>
+          <input type="text" id="f_userName" placeholder="مثال: محمد أحمد">
         </div>
         <div class="field"><label>حالة المركبة</label>
           <select id="f_status"><option value=""></option></select>
@@ -397,7 +400,7 @@ tbody tr:nth-child(even){background:var(--row-alt);}
       <table id="vTable">
         <thead>
           <tr>
-            <th>المحافظة</th><th>الجهة</th><th>الحالة</th><th>نوع التسجيل</th>
+            <th>المحافظة</th><th>الجهة</th><th>اسم المستخدم</th><th>الحالة</th><th>نوع التسجيل</th>
             <th>الطراز</th><th>اللوحة</th><th>السنة</th><th>اللون</th>
             <th>الهيكل</th><th>التسلسلي</th><th>الاستمارة</th><th>نسخة الاستمارة</th>
             <th>ملاحظات</th><th></th>
@@ -640,7 +643,7 @@ document.getElementById('govTabs').addEventListener('click', e=>{
 /* ---------- render ---------- */
 function render(){
   const q = document.getElementById('searchBox').value.trim().toLowerCase();
-  const keys = ['gov','entity','status','regType','model','plateNum','plateLet','year','color','chassis','serial','form','notes'];
+  const keys = ['gov','entity','userName','status','regType','model','plateNum','plateLet','year','color','chassis','serial','form','notes'];
   const searched = vehicles.filter(v=>{
     if(!q) return true;
     return keys.some(k => (v[k]||'').toString().toLowerCase().includes(q));
@@ -661,7 +664,7 @@ function render(){
       : `<button class="btn-ghost btn-sm" data-hist="${v.id}">🕘</button>`;
     const thumb = v.formImageData ? `<img class="thumb" src="${v.formImageData}" data-lightbox="1">` : '';
     tr.innerHTML = `
-      <td>${esc(v.gov)}</td><td>${esc(v.entity)}</td><td>${esc(v.status)}</td><td>${esc(v.regType)}</td>
+      <td>${esc(v.gov)}</td><td>${esc(v.entity)}</td><td>${esc(v.userName)}</td><td>${esc(v.status)}</td><td>${esc(v.regType)}</td>
       <td>${esc(v.model)}</td><td class="plate">${esc(v.plateLet)} ${esc(v.plateNum)}</td>
       <td>${esc(v.year)}</td><td>${esc(v.color)}</td><td>${esc(v.chassis)}</td><td>${esc(v.serial)}</td>
       <td>${esc(v.form)}</td><td>${thumb}</td><td>${esc(v.notes)}</td>
@@ -683,6 +686,7 @@ function openPanel(v){
   editingId = v ? v.id : null;
   document.getElementById('f_gov').value = v ? (v.gov||'') : '';
   document.getElementById('f_entity').value = v ? (v.entity||'') : '';
+  document.getElementById('f_userName').value = v ? (v.userName||'') : '';
   document.getElementById('f_status').value = v ? (v.status||'') : '';
   document.getElementById('f_regType').value = v ? (v.regType||'') : '';
   document.getElementById('f_model').value = v ? (v.model||'') : '';
@@ -723,8 +727,8 @@ async function ensureEntitySaved(value){
 }
 
 /* ---------- history / audit log ---------- */
-const FIELD_KEYS = ['gov','entity','status','regType','model','plateNum','plateLet','year','color','chassis','serial','form','notes'];
-const FIELD_LABELS = {gov:'المحافظة', entity:'الجهة', status:'الحالة', regType:'نوع التسجيل', model:'الطراز', plateNum:'أرقام اللوحة', plateLet:'أحرف اللوحة', year:'السنة', color:'اللون', chassis:'رقم الهيكل', serial:'الرقم التسلسلي', form:'رقم الاستمارة', notes:'ملاحظات'};
+const FIELD_KEYS = ['gov','entity','userName','status','regType','model','plateNum','plateLet','year','color','chassis','serial','form','notes'];
+const FIELD_LABELS = {gov:'المحافظة', entity:'الجهة', userName:'اسم المستخدم', status:'الحالة', regType:'نوع التسجيل', model:'الطراز', plateNum:'أرقام اللوحة', plateLet:'أحرف اللوحة', year:'السنة', color:'اللون', chassis:'رقم الهيكل', serial:'الرقم التسلسلي', form:'رقم الاستمارة', notes:'ملاحظات'};
 const ACTION_LABELS = {created:'إضافة', updated:'تعديل — الحالة قبل هذا التعديل', deleted:'حذف — آخر بيانات قبل الحذف', restored:'استعادة — الحالة قبل الاستعادة'};
 function pickFields(obj){ const out={}; FIELD_KEYS.forEach(k=> out[k]=obj[k]||''); return out; }
 async function logHistory(vehicleId, action, snapshot){
@@ -807,6 +811,7 @@ document.getElementById('saveBtn').onclick = async ()=>{
   const data = {
     gov: document.getElementById('f_gov').value,
     entity: document.getElementById('f_entity').value.trim(),
+    userName: document.getElementById('f_userName').value.trim(),
     status: document.getElementById('f_status').value,
     regType: document.getElementById('f_regType').value,
     model: document.getElementById('f_model').value.trim(),
@@ -1002,11 +1007,10 @@ async function processCardImage(file){
   const extras = [];
   if(cleanText(f.registrationType)) extras.push('نوع التسجيل بالاستمارة: ' + cleanText(f.registrationType));
   if(cleanText(f.owner)) extras.push('المالك: ' + cleanText(f.owner,80));
-  if(cleanText(f.user)) extras.push('المستخدم: ' + cleanText(f.user,80));
   if(cleanText(f.expiryDate)) extras.push('تاريخ انتهاء الاستمارة: ' + cleanText(f.expiryDate,30));
 
   const v = {
-    gov:'', entity:'', status:'', regType:'',
+    gov:'', entity:'', userName: cleanText(f.user, 80), status:'', regType:'',
     model,
     year: cleanYear(f.year),
     color: cleanText(f.color, 20),
@@ -1020,7 +1024,7 @@ async function processCardImage(file){
   };
   openPanel(v);   // بدون حفظ — المستخدم يراجع ثم يضغط حفظ
 
-  const map = {model:'f_model', year:'f_year', color:'f_color', chassis:'f_chassis', serial:'f_serial', form:'f_form', notes:'f_notes'};
+  const map = {userName:'f_userName', model:'f_model', year:'f_year', color:'f_color', chassis:'f_chassis', serial:'f_serial', form:'f_form', notes:'f_notes'};
   const filled = Object.keys(map).filter(k=> v[k]).map(k=> map[k]);
   if(v.plateLet) [0,1,2].forEach(i=>{ if(document.getElementById('pl_'+i).value) filled.push('pl_'+i); });
   if(v.plateNum) [0,1,2,3].forEach(i=>{ if(document.getElementById('pd_'+i).value) filled.push('pd_'+i); });
