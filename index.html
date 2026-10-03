@@ -330,7 +330,7 @@ tbody tr:nth-child(even){background:var(--row-alt);}
     <div class="toolbar">
       <input class="search-box" type="search" id="searchBox" placeholder="ابحث بأي حقل: لوحة، هيكل، جهة، محافظة...">
       <span id="editorTools" style="display:none; gap:10px; flex-wrap:wrap;">
-        <button class="btn-ghost" id="cameraBtn">📷 تصوير بطاقة البيانات</button>
+        <button class="btn-ghost" id="cameraBtn">🪪 إضافة رخصة السير</button>
         <button class="btn-primary" id="openAddBtn">+ إضافة يدوية</button>
       </span>
     </div>
@@ -877,7 +877,7 @@ document.getElementById('exportBtn').onclick = ()=>{
   URL.revokeObjectURL(url);
 };
 
-/* ---------- قراءة بطاقة البيانات (الاستمارة) ---------- */
+/* ---------- قراءة رخصة السير (الاستمارة) ---------- */
 const AR_DIGITS = {'٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9','۰':'0','۱':'1','۲':'2','۳':'3','۴':'4','۵':'5','۶':'6','۷':'7','۸':'8','۹':'9'};
 function toLatinDigits(s){ return (s==null?'':String(s)).replace(/[٠-٩۰-۹]/g, d=> AR_DIGITS[d]); }
 function onlyDigits(s){ return toLatinDigits(s).replace(/\D/g,''); }
@@ -911,30 +911,33 @@ function cleanYear(raw){
 }
 function cleanText(raw, max){ return toLatinDigits(raw||'').replace(/\s+/g,' ').trim().slice(0, max||60); }
 
-const CARD_PROMPT = `أنت خبير في قراءة "رخصة سير المركبة" السعودية (الاستمارة) الصادرة من المرور.
-اقرأ الصورة بدقة واستخرج القيم المكتوبة فعليًا في البطاقة فقط.
+const CARD_PROMPT = `أنت نظام متخصص في قراءة "رخصة سير المركبة" السعودية (الاستمارة) الصادرة من الإدارة العامة للمرور.
 
-الحقول المطلوبة:
-- brand: الماركة / Make (مثل: تويوتا، هيونداي، نيسان) — بالعربي كما هي مكتوبة.
-- model: الطراز / Model (مثل: كامري، هايلكس، لاندكروزر).
-- year: سنة الصنع / Model Year — 4 أرقام.
-- color: اللون الأساسي / Major Color — بالعربي.
-- chassis: رقم الهيكل / Chassis No (VIN) — عادة 17 خانة حروف إنجليزية وأرقام.
-- serial: الرقم التسلسلي / Sequence No — أرقام فقط.
-- formNumber: رقم الاستمارة إن وُجد كحقل مستقل، وإلا اتركه فارغًا.
-- plateLetters: حروف اللوحة بالعربي فقط، مفصولة بمسافة، بنفس ترتيب قراءتها من اليمين لليسار (الحرف الأول = أقصى اليمين).
-- plateNumbers: أرقام اللوحة (من 1 إلى 4 أرقام).
-- registrationType: نوع التسجيل كما هو مكتوب (مثل: خصوصي، نقل عام، حكومي).
-- owner: اسم المالك.
-- user: اسم المستخدم إن وُجد.
-- expiryDate: تاريخ الانتهاء كما هو مكتوب.
-- isVehicleCard: true إذا كانت الصورة رخصة سير/استمارة مركبة، وإلا false.
+الخطوة 1 — انسخ كل نص البطاقة حرفيًا في الحقل transcription، سطرًا سطرًا، بصيغة "اسم الحقل: القيمة" كما يظهر في البطاقة (عربي وإنجليزي).
+الخطوة 2 — من النص المنسوخ فقط، عبّئ الحقول التالية:
+
+- brand: "ماركة المركبة" / Vehicle Make — مثل: تويوتا، هيونداي، نيسان، فورد، شفروليه. اكتبها بالعربي.
+- model: "طراز المركبة" / Model — مثل: كامري، هايلكس، لاندكروزر، اكسنت.
+- year: "سنة الصنع" / Model Year — 4 أرقام فقط (مثل 2022). ليست تاريخ الإصدار ولا الانتهاء.
+- color: "اللون" أو "اللون الأساسي" / Major Color — بالعربي (مثل: أبيض، فضي، أسود).
+- chassis: "رقم الهيكل" / Chassis No. (VIN) — 17 خانة من حروف إنجليزية كبيرة وأرقام، بدون مسافات. لا يحتوي الحروف I و O و Q.
+- serial: "الرقم التسلسلي" / Sequence No. — أرقام فقط (غالبًا 8 إلى 10 أرقام).
+- formNumber: رقم الاستمارة فقط إذا كان مكتوبًا بعنوان مستقل، وإلا "".
+- plateLetters: حروف "رقم اللوحة" بالعربي فقط، 3 حروف مفصولة بمسافة، بترتيب قراءتها العربية (من اليمين لليسار). الحروف المسموحة فقط: ا ب ح د ر س ص ط ع ق ك ل م ن ه و ي.
+- plateNumbers: أرقام "رقم اللوحة" — من 1 إلى 4 أرقام.
+- registrationType: "نوع التسجيل" كما هو (مثل: خصوصي، نقل خاص، نقل عام، حكومي).
+- owner: اسم "المالك".
+- user: اسم "المستخدم الفعلي" أو "المستخدم" إن وُجد، وإلا "".
+- expiryDate: "تاريخ الانتهاء" كما هو مكتوب.
+- isVehicleCard: true إذا كانت الصورة رخصة سير/استمارة مركبة سعودية، وإلا false.
 
 قواعد صارمة:
-1. حوّل كل الأرقام العربية (٠١٢٣٤٥٦٧٨٩) إلى أرقام إنجليزية (0123456789).
-2. لا تخمّن أبدًا. إذا كان الحقل غير موجود أو غير واضح اكتب نصًا فارغًا "".
-3. لا تخلط بين الحقول: رقم الهيكل ليس الرقم التسلسلي، وسنة الصنع ليست تاريخ الانتهاء.
-4. لا تضف أي شرح، أعد JSON فقط.`;
+1. حوّل كل الأرقام العربية الهندية (٠١٢٣٤٥٦٧٨٩) إلى أرقام إنجليزية (0123456789).
+2. لا تخمّن أبدًا ولا تخترع قيمة. أي حقل غير موجود أو غير مقروء = "".
+3. لا تخلط الحقول: رقم الهيكل ≠ الرقم التسلسلي ≠ رقم الهوية. سنة الصنع ≠ تاريخ الانتهاء. اسم المالك ≠ الماركة.
+4. انتبه للأحرف المتشابهة في رقم الهيكل: 0 (صفر) وليس O، 1 وليس I، 5 وليس S، 8 وليس B — راجع كل خانة.
+5. أعد JSON فقط بهذا الشكل وبهذا الترتيب بالضبط:
+{"transcription":"","isVehicleCard":true,"brand":"","model":"","year":"","color":"","chassis":"","serial":"","formNumber":"","plateLetters":"","plateNumbers":"","registrationType":"","owner":"","user":"","expiryDate":""}`;
 
 const AI_MODELS = ['gemini-3.5-flash','gemini-3.8-flash','gemini-3.5-flash-lite'];
 async function readCardWithAI(dataUrl){
@@ -943,7 +946,12 @@ async function readCardWithAI(dataUrl){
   let lastErr;
   for(const name of AI_MODELS){
     try{ return await window.__aiReadCard(name, CARD_PROMPT, base64); }
-    catch(err){ lastErr = err; console.warn('AI model failed:', name, err); }
+    catch(err){
+      lastErr = err; console.warn('AI model failed:', name, err);
+      const m = String(err && (err.message || err)).toLowerCase();
+      // أخطاء الإعداد ما ينفع معها تجربة نموذج ثاني
+      if(/not enabled|has not been used|service_disabled|disabled|permission|api key|api_key|billing|forbidden|403/.test(m) && !/not found|404/.test(m)) break;
+    }
   }
   throw lastErr || new Error('ai-failed');
 }
@@ -970,11 +978,23 @@ function markFilled(ids){
 }
 
 document.getElementById('cameraBtn').onclick = async ()=>{
-  const file = await chooseImage('تصوير بطاقة البيانات', 'صوّر الاستمارة بشكل مستقيم وواضح بدون انعكاس ضوء، وبنقرأ بياناتها تلقائيًا');
+  const file = await chooseImage('إضافة رخصة السير', 'صوّر رخصة السير (الاستمارة) مستقيمة وقريبة وبدون انعكاس ضوء، وبتنقرأ بياناتها تلقائيًا');
   if(file) processCardImage(file);
 };
 
+let aiErrorMsg = '';
+function explainAiError(err){
+  const m = String(err && (err.message || err)).toLowerCase();
+  if(m.includes('ai-not-loaded')) return 'محرك القراءة الذكية ما تحمّل (تحقق من الإنترنت وحدّث الصفحة).';
+  if(/not enabled|has not been used|service_disabled|disabled/.test(m)) return 'القراءة الذكية غير مفعّلة في Firebase — فعّل AI Logic (Gemini Developer API).';
+  if(/api key|api_key|referer|referrer/.test(m)) return 'مفتاح Firebase لا يسمح باستخدام القراءة الذكية من هذا الموقع.';
+  if(/permission|forbidden|403/.test(m)) return 'لا توجد صلاحية لاستخدام القراءة الذكية في مشروع Firebase.';
+  if(/quota|429|resource_exhausted/.test(m)) return 'تم تجاوز الحد المجاني المؤقت للقراءة الذكية، جرّب بعد دقيقة.';
+  if(/not found|404/.test(m)) return 'نموذج القراءة الذكية غير متاح حاليًا.';
+  return 'تعذّرت القراءة الذكية (' + String(err && (err.message||err)).slice(0,120) + ').';
+}
 async function processCardImage(file){
+  aiErrorMsg = '';
   showToast('⏳ جارٍ قراءة الاستمارة...', 'info');
   let thumb, hiRes;
   try{
@@ -992,8 +1012,9 @@ async function processCardImage(file){
     f = r;
   }catch(err){
     source = 'local';
+    aiErrorMsg = explainAiError(err);
     if(typeof Tesseract === 'undefined'){
-      showToast('القراءة الذكية غير متاحة حاليًا. أضف البيانات يدويًا.', 'err');
+      showToast('⚠️ ' + aiErrorMsg + ' أضف البيانات يدويًا.', 'err');
       openPanel({formImageData: thumb}); return;
     }
     try{
@@ -1033,9 +1054,9 @@ async function processCardImage(file){
   const count = ['model','year','color','chassis','serial','plateNum'].filter(k=> v[k]).length;
   const warn = (v.chassis && v.chassis.length !== 17) ? ' ⚠️ رقم الهيكل ليس 17 خانة، تأكد منه.' : '';
   showToast(
-    (source === 'ai' ? '✅ تمت قراءة الاستمارة' : '⚠️ قراءة محلية') +
+    (source === 'ai' ? '✅ تمت قراءة رخصة السير' : ('⚠️ ' + aiErrorMsg + ' تم استخدام القراءة المحلية الضعيفة')) +
     ` — تم تعبئة ${count} من 6 حقول أساسية (مظللة). راجعها، اختر المحافظة والجهة، ثم اضغط «حفظ».` + warn,
-    source === 'ai' && !warn ? 'ok' : 'info');
+    source === 'ai' && !warn ? 'ok' : (source === 'ai' ? 'info' : 'err'));
 }
 
 /* ---------- Access management (admin sidebar) ---------- */
@@ -1159,24 +1180,21 @@ auth.onAuthStateChanged(async user=>{
 <script type="module">
 // القراءة الذكية للاستمارة عبر Firebase AI Logic (Gemini Developer API)
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
-import { getAI, getGenerativeModel, GoogleAIBackend, Schema } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-ai.js";
+import { getAI, getGenerativeModel, GoogleAIBackend } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-ai.js";
 try{
   const aiApp = initializeApp(window.FIREBASE_CONFIG, 'card-reader');
   const ai = getAI(aiApp, { backend: new GoogleAIBackend() });
-  const S = Schema.string();
-  const schema = Schema.object({ properties: {
-    brand:S, model:S, year:S, color:S, chassis:S, serial:S, formNumber:S,
-    plateLetters:S, plateNumbers:S, registrationType:S, owner:S, user:S, expiryDate:S,
-    isVehicleCard: Schema.boolean()
-  }});
   const cache = {};
   window.__aiReadCard = async (modelName, prompt, base64)=>{
     const model = cache[modelName] || (cache[modelName] = getGenerativeModel(ai, {
       model: modelName,
-      generationConfig: { responseMimeType:'application/json', responseSchema: schema, temperature: 0 }
+      generationConfig: { responseMimeType:'application/json', temperature: 0 }
     }));
     const res = await model.generateContent([ prompt, { inlineData: { data: base64, mimeType: 'image/jpeg' } } ]);
-    return JSON.parse(res.response.text());
+    let t = res.response.text().trim().replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();
+    const i = t.indexOf('{'), j = t.lastIndexOf('}');
+    if(i > -1 && j > i) t = t.slice(i, j+1);
+    return JSON.parse(t);
   };
   window.__aiReady = true;
 }catch(err){ console.warn('AI init failed', err); }
