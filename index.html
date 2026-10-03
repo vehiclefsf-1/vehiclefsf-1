@@ -104,6 +104,7 @@ button{ font-family:inherit; font-size:14px; font-weight:600; cursor:pointer; bo
 .field label{display:block; font-size:12px; color:var(--ink-soft); margin-bottom:4px; font-weight:600;}
 .plate-row{display:flex; gap:6px; direction:ltr;}
 .plate-row select{text-align:center; padding:8px 4px;}
+#plateLettersRow{direction:rtl;}
 .plate-group{margin-bottom:4px;}
 .plate-group-label{font-size:11px; color:var(--ink-soft); margin-bottom:4px; display:block;}
 .panel-actions{display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;}
@@ -199,6 +200,7 @@ tbody tr:nth-child(even){background:var(--row-alt);}
 .gov-tab.active .n{background:color-mix(in srgb, var(--accent-ink) 22%, transparent); color:var(--accent-ink);}
 .gov-tab.zero{opacity:.55;}
 .gov-tab.hq{border-color:var(--gold);}
+.ai-filled{outline:2px solid var(--gold) !important; outline-offset:0; background:color-mix(in srgb, var(--gold) 10%, var(--surface)) !important;}
 .gov-tab.hq:not(.active) .lbl::before{content:"★ "; color:var(--gold);}
 
 @media (max-width:640px){
@@ -441,6 +443,7 @@ const firebaseConfig = {
   appId: "1:257237487200:web:f6b44371811a7f3c56fd05"
 };
 firebase.initializeApp(firebaseConfig);
+window.FIREBASE_CONFIG = firebaseConfig;
 const auth = firebase.auth();
 const db = firebase.firestore();
 
@@ -516,17 +519,17 @@ function readPlateSelects(){
 }
 
 /* ---------- image compression ---------- */
-function compressImage(file, maxW){
+function compressImage(file, maxW, quality){
   return new Promise((resolve,reject)=>{
     const img = new Image();
     const reader = new FileReader();
     reader.onload = e=>{ img.onload = ()=>{
-      const scale = Math.min(1, maxW / img.width);
+      const scale = Math.min(1, maxW / Math.max(img.width, img.height));
       const w = Math.round(img.width*scale), h = Math.round(img.height*scale);
       const canvas = document.createElement('canvas');
       canvas.width = w; canvas.height = h;
       canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      resolve(canvas.toDataURL('image/jpeg', 0.5));
+      resolve(canvas.toDataURL('image/jpeg', quality || 0.5));
     }; img.onerror = reject; img.src = e.target.result; };
     reader.onerror = reject;
     reader.readAsDataURL(file);
@@ -693,8 +696,8 @@ function openPanel(v){
   setFormThumb(v ? (v.formImageData||'') : '');
   document.getElementById('formPanel').classList.add('open');
 }
-function closePanel(){ editingId = null; document.getElementById('formPanel').classList.remove('open'); }
-document.getElementById('openAddBtn').onclick = ()=> openPanel(null);
+function closePanel(){ document.querySelectorAll('.ai-filled').forEach(el=> el.classList.remove('ai-filled')); editingId = null; document.getElementById('formPanel').classList.remove('open'); }
+document.getElementById('openAddBtn').onclick = ()=>{ closePanel(); openPanel(null); };
 document.getElementById('cancelBtn').onclick = closePanel;
 
 /* ---------- entity suggestions (shared, growing list) ---------- */
@@ -823,6 +826,10 @@ document.getElementById('saveBtn').onclick = async ()=>{
     showToast('الرجاء إدخال أرقام اللوحة أو رقم الهيكل على الأقل.', 'err');
     return;
   }
+  if(!editingId && data.chassis){
+    const dup = vehicles.find(v=> (v.chassis||'').toUpperCase() === data.chassis.toUpperCase());
+    if(dup && !(await askConfirm(`رقم الهيكل ${data.chassis} مسجّل مسبقًا (${dup.gov||'بدون محافظة'} — لوحة ${dup.plateLet||''} ${dup.plateNum||''}). تبي تضيفه مرة ثانية؟`))) return;
+  }
   ensureEntitySaved(data.entity);
   try{
     if(editingId){
@@ -865,45 +872,166 @@ document.getElementById('exportBtn').onclick = ()=>{
   URL.revokeObjectURL(url);
 };
 
-/* ---------- OCR camera capture ---------- */
-function extractFields(text){
-  const r = {model:'', plateNum:'', plateLet:'', form:'', chassis:'', year:'', color:''};
-  let m = text.match(/(?:هيكل|الهيكل|VIN)[^A-Za-z0-9]{0,8}([A-Za-z0-9]{6,17})/i);
-  if(m) r.chassis = m[1]; else { m = text.match(/\b[A-HJ-NPR-Z0-9]{11,17}\b/); if(m) r.chassis = m[0]; }
-  m = text.match(/استمارة[^\d]{0,8}(\d{6,12})/); if(m) r.form = m[1];
-  m = text.match(/(?:رقم اللوحة|اللوحة)[^\d]{0,8}(\d{1,4})/); if(m) r.plateNum = m[1];
-  m = text.match(/(?:أحرف اللوحة|الأحرف)[^\u0621-\u064A]{0,8}([\u0621-\u064A](?:\s?[\u0621-\u064A]){0,3})/); if(m) r.plateLet = m[1].trim();
-  m = text.match(/(?:الطراز|الفئة|الموديل)[:\s]{0,6}([^\n\r]{2,30})/); if(m) r.model = m[1].trim();
-  m = text.match(/(?:سنة الصنع|الموديل السنوي)[:\s]{0,6}(\d{4})/); if(m) r.year = m[1];
-  m = text.match(/(?:اللون)[:\s]{0,6}([^\n\r]{2,15})/); if(m) r.color = m[1].trim();
+/* ---------- قراءة بطاقة البيانات (الاستمارة) ---------- */
+const AR_DIGITS = {'٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9','۰':'0','۱':'1','۲':'2','۳':'3','۴':'4','۵':'5','۶':'6','۷':'7','۸':'8','۹':'9'};
+function toLatinDigits(s){ return (s==null?'':String(s)).replace(/[٠-٩۰-۹]/g, d=> AR_DIGITS[d]); }
+function onlyDigits(s){ return toLatinDigits(s).replace(/\D/g,''); }
+// حروف اللوحات السعودية: العربية ↔ الإنجليزية
+const EN_TO_AR_PLATE = {A:'ا',B:'ب',J:'ح',D:'د',R:'ر',S:'س',X:'ص',T:'ط',E:'ع',G:'ق',K:'ك',L:'ل',Z:'م',N:'ن',H:'ه',U:'و',V:'ي'};
+function normPlateLetter(ch){
+  ch = (ch||'').trim();
+  if(!ch) return '';
+  if(/[A-Za-z]/.test(ch)) return EN_TO_AR_PLATE[ch.toUpperCase()] || '';
+  ch = ch.replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه');
+  return PLATE_LETTERS.includes(ch) ? ch : '';
+}
+function cleanPlateLetters(raw){
+  const s = toLatinDigits(raw||'').replace(/[^ء-يA-Za-z]/g,' ').trim();
+  if(!s) return '';
+  let parts = s.split(/\s+/);
+  // لو جت الحروف ملتصقة (مثل "حصط") نفصلها
+  if(parts.length === 1 && parts[0].length > 1) parts = parts[0].split('');
+  return parts.map(normPlateLetter).filter(Boolean).slice(0,3).join(' ');
+}
+function cleanVin(raw){
+  let v = toLatinDigits(raw||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  // رقم الهيكل الدولي لا يحتوي I و O و Q
+  if(v.length === 17) v = v.replace(/O/g,'0').replace(/Q/g,'0').replace(/I/g,'1');
+  return v;
+}
+function cleanYear(raw){
+  const y = onlyDigits(raw).slice(0,4);
+  const n = parseInt(y,10), max = new Date().getFullYear() + 1;
+  return (n >= 1980 && n <= max) ? String(n) : '';
+}
+function cleanText(raw, max){ return toLatinDigits(raw||'').replace(/\s+/g,' ').trim().slice(0, max||60); }
+
+const CARD_PROMPT = `أنت خبير في قراءة "رخصة سير المركبة" السعودية (الاستمارة) الصادرة من المرور.
+اقرأ الصورة بدقة واستخرج القيم المكتوبة فعليًا في البطاقة فقط.
+
+الحقول المطلوبة:
+- brand: الماركة / Make (مثل: تويوتا، هيونداي، نيسان) — بالعربي كما هي مكتوبة.
+- model: الطراز / Model (مثل: كامري، هايلكس، لاندكروزر).
+- year: سنة الصنع / Model Year — 4 أرقام.
+- color: اللون الأساسي / Major Color — بالعربي.
+- chassis: رقم الهيكل / Chassis No (VIN) — عادة 17 خانة حروف إنجليزية وأرقام.
+- serial: الرقم التسلسلي / Sequence No — أرقام فقط.
+- formNumber: رقم الاستمارة إن وُجد كحقل مستقل، وإلا اتركه فارغًا.
+- plateLetters: حروف اللوحة بالعربي فقط، مفصولة بمسافة، بنفس ترتيب قراءتها من اليمين لليسار (الحرف الأول = أقصى اليمين).
+- plateNumbers: أرقام اللوحة (من 1 إلى 4 أرقام).
+- registrationType: نوع التسجيل كما هو مكتوب (مثل: خصوصي، نقل عام، حكومي).
+- owner: اسم المالك.
+- user: اسم المستخدم إن وُجد.
+- expiryDate: تاريخ الانتهاء كما هو مكتوب.
+- isVehicleCard: true إذا كانت الصورة رخصة سير/استمارة مركبة، وإلا false.
+
+قواعد صارمة:
+1. حوّل كل الأرقام العربية (٠١٢٣٤٥٦٧٨٩) إلى أرقام إنجليزية (0123456789).
+2. لا تخمّن أبدًا. إذا كان الحقل غير موجود أو غير واضح اكتب نصًا فارغًا "".
+3. لا تخلط بين الحقول: رقم الهيكل ليس الرقم التسلسلي، وسنة الصنع ليست تاريخ الانتهاء.
+4. لا تضف أي شرح، أعد JSON فقط.`;
+
+const AI_MODELS = ['gemini-3.5-flash','gemini-3.8-flash','gemini-3.5-flash-lite'];
+async function readCardWithAI(dataUrl){
+  if(!window.__aiReady) throw new Error('ai-not-loaded');
+  const base64 = dataUrl.split(',')[1];
+  let lastErr;
+  for(const name of AI_MODELS){
+    try{ return await window.__aiReadCard(name, CARD_PROMPT, base64); }
+    catch(err){ lastErr = err; console.warn('AI model failed:', name, err); }
+  }
+  throw lastErr || new Error('ai-failed');
+}
+
+// احتياطي: القراءة المحلية لو الذكاء الاصطناعي غير متاح
+function extractFieldsLocal(text){
+  text = toLatinDigits(text);
+  const r = {};
+  let m = text.match(/\b[A-HJ-NPR-Z0-9]{17}\b/); if(m) r.chassis = m[0];
+  m = text.match(/(?:التسلسلي|Sequence)[^\d]{0,12}(\d{6,10})/i); if(m) r.serial = m[1];
+  m = text.match(/(?:سنة الصنع|Model Year)[^\d]{0,12}((?:19|20)\d{2})/i); if(m) r.year = m[1];
   return r;
 }
+
+function markFilled(ids){
+  document.querySelectorAll('.ai-filled').forEach(el=> el.classList.remove('ai-filled'));
+  ids.forEach(id=>{
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.classList.add('ai-filled');
+    el.addEventListener('input', ()=> el.classList.remove('ai-filled'), {once:true});
+    el.addEventListener('change', ()=> el.classList.remove('ai-filled'), {once:true});
+  });
+}
+
 document.getElementById('cameraBtn').onclick = async ()=>{
-  const file = await chooseImage('تصوير بطاقة البيانات', 'صوّر البطاقة مباشرة أو اختر صورة محفوظة، وبنقرأ بياناتها تلقائيًا');
+  const file = await chooseImage('تصوير بطاقة البيانات', 'صوّر الاستمارة بشكل مستقيم وواضح بدون انعكاس ضوء، وبنقرأ بياناتها تلقائيًا');
   if(file) processCardImage(file);
 };
+
 async function processCardImage(file){
-  if(typeof Tesseract === 'undefined'){ showToast('تعذّر تحميل محرك القراءة. تحقق من الاتصال بالإنترنت.', 'err'); return; }
-  showToast('جارٍ قراءة بطاقة البيانات...', 'info');
+  showToast('⏳ جارٍ قراءة الاستمارة...', 'info');
+  let thumb, hiRes;
   try{
-    const imgData = await compressImage(file, 900);
-    const { data:{ text } } = await Tesseract.recognize(file, 'ara+eng', {
-      logger: msg=>{ if(msg.status==='recognizing text') showToast(`جارٍ القراءة... ${Math.round((msg.progress||0)*100)}%`, 'info'); }
-    });
-    const f = extractFields(text);
-    const data = {
-      gov:'', entity:'', status:'', regType:'', model:f.model, plateNum:f.plateNum, plateLet:f.plateLet,
-      year:f.year, color:f.color, chassis:f.chassis, serial:'', form:f.form, formImageData: imgData,
-      notes: 'نص مستخرج تلقائيًا من الصورة (راجعه لو نقص شيء):\n' + text.trim().slice(0,600),
-      updatedBy: auth.currentUser.email,
-      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    };
-    const ref = await db.collection('vehicles').add(data);
-    logHistory(ref.id, 'created', data);
-    showToast('تمت إضافة المركبة من الصورة. راجع الحقول قبل الإغلاق.', 'ok');
-    openPanel({id: ref.id, ...data});
-  }catch(err){ showToast('تعذّرت قراءة الصورة، جرّب صورة أوضح أو أضف يدويًا.', 'err'); }
+    thumb = await compressImage(file, 900);
+    hiRes = await compressImage(file, 1800, 0.88);
+  }catch(err){ showToast('تعذّر فتح الصورة. جرّب صورة ثانية.', 'err'); return; }
+
+  let f = null, source = 'ai';
+  try{
+    const r = await readCardWithAI(hiRes);
+    if(r && r.isVehicleCard === false){
+      showToast('الصورة ما تبدو استمارة مركبة. صوّر الاستمارة نفسها بشكل أوضح.', 'err');
+      return;
+    }
+    f = r;
+  }catch(err){
+    source = 'local';
+    if(typeof Tesseract === 'undefined'){
+      showToast('القراءة الذكية غير متاحة حاليًا. أضف البيانات يدويًا.', 'err');
+      openPanel({formImageData: thumb}); return;
+    }
+    try{
+      showToast('⏳ القراءة الذكية غير متاحة، جارٍ القراءة المحلية (أقل دقة)...', 'info');
+      const { data:{ text } } = await Tesseract.recognize(hiRes, 'ara+eng');
+      f = extractFieldsLocal(text);
+    }catch(e){ f = {}; }
+  }
+
+  const model = [cleanText(f.brand,25), cleanText(f.model,30)].filter(Boolean).join(' ');
+  const extras = [];
+  if(cleanText(f.registrationType)) extras.push('نوع التسجيل بالاستمارة: ' + cleanText(f.registrationType));
+  if(cleanText(f.owner)) extras.push('المالك: ' + cleanText(f.owner,80));
+  if(cleanText(f.user)) extras.push('المستخدم: ' + cleanText(f.user,80));
+  if(cleanText(f.expiryDate)) extras.push('تاريخ انتهاء الاستمارة: ' + cleanText(f.expiryDate,30));
+
+  const v = {
+    gov:'', entity:'', status:'', regType:'',
+    model,
+    year: cleanYear(f.year),
+    color: cleanText(f.color, 20),
+    chassis: cleanVin(f.chassis),
+    serial: onlyDigits(f.serial).slice(0,12),
+    form: onlyDigits(f.formNumber).slice(0,15),
+    plateLet: cleanPlateLetters(f.plateLetters),
+    plateNum: onlyDigits(f.plateNumbers).slice(0,4),
+    notes: extras.join('\n'),
+    formImageData: thumb
+  };
+  openPanel(v);   // بدون حفظ — المستخدم يراجع ثم يضغط حفظ
+
+  const map = {model:'f_model', year:'f_year', color:'f_color', chassis:'f_chassis', serial:'f_serial', form:'f_form', notes:'f_notes'};
+  const filled = Object.keys(map).filter(k=> v[k]).map(k=> map[k]);
+  if(v.plateLet) [0,1,2].forEach(i=>{ if(document.getElementById('pl_'+i).value) filled.push('pl_'+i); });
+  if(v.plateNum) [0,1,2,3].forEach(i=>{ if(document.getElementById('pd_'+i).value) filled.push('pd_'+i); });
+  markFilled(filled);
+
+  const count = ['model','year','color','chassis','serial','plateNum'].filter(k=> v[k]).length;
+  const warn = (v.chassis && v.chassis.length !== 17) ? ' ⚠️ رقم الهيكل ليس 17 خانة، تأكد منه.' : '';
+  showToast(
+    (source === 'ai' ? '✅ تمت قراءة الاستمارة' : '⚠️ قراءة محلية') +
+    ` — تم تعبئة ${count} من 6 حقول أساسية (مظللة). راجعها، اختر المحافظة والجهة، ثم اضغط «حفظ».` + warn,
+    source === 'ai' && !warn ? 'ok' : 'info');
 }
 
 /* ---------- Access management (admin sidebar) ---------- */
@@ -1023,6 +1151,31 @@ auth.onAuthStateChanged(async user=>{
     render();
   }, err=>{ showToast('تعذّر تحميل البيانات: ' + (err.message||''), 'err'); });
 });
+</script>
+<script type="module">
+// القراءة الذكية للاستمارة عبر Firebase AI Logic (Gemini Developer API)
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+import { getAI, getGenerativeModel, GoogleAIBackend, Schema } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-ai.js";
+try{
+  const aiApp = initializeApp(window.FIREBASE_CONFIG, 'card-reader');
+  const ai = getAI(aiApp, { backend: new GoogleAIBackend() });
+  const S = Schema.string();
+  const schema = Schema.object({ properties: {
+    brand:S, model:S, year:S, color:S, chassis:S, serial:S, formNumber:S,
+    plateLetters:S, plateNumbers:S, registrationType:S, owner:S, user:S, expiryDate:S,
+    isVehicleCard: Schema.boolean()
+  }});
+  const cache = {};
+  window.__aiReadCard = async (modelName, prompt, base64)=>{
+    const model = cache[modelName] || (cache[modelName] = getGenerativeModel(ai, {
+      model: modelName,
+      generationConfig: { responseMimeType:'application/json', responseSchema: schema, temperature: 0 }
+    }));
+    const res = await model.generateContent([ prompt, { inlineData: { data: base64, mimeType: 'image/jpeg' } } ]);
+    return JSON.parse(res.response.text());
+  };
+  window.__aiReady = true;
+}catch(err){ console.warn('AI init failed', err); }
 </script>
 </body>
 </html>
