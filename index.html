@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>سجل المركبات</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+:root{
+  --bg:#F7F5F0; --surface:#FFFFFF; --ink:#1E2430; --ink-soft:#5B6472;
+  --accent:#146356; --accent-ink:#FFFFFF; --danger:#A6402A; --border:#DCD7CC;
+  --row-alt:#F1EEE6; --gold:#9C7A2E;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#171A1F; --surface:#20242B; --ink:#EDEEF0; --ink-soft:#9AA2AD;
+    --accent:#3FA593; --accent-ink:#0E1116; --danger:#E07256; --border:#333944;
+    --row-alt:#262A32; --gold:#D9B25C;
+  }
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px); height:100%;}
+*{box-sizing:border-box;}
+body{margin:0; height:100%; background:var(--bg); color:var(--ink); font-family:'Cairo',sans-serif; -webkit-font-smoothing:antialiased;}
+
+#signinScreen, #blockedScreen{
+  min-height:100vh; display:flex; align-items:center; justify-content:center; flex-direction:column;
+  gap:22px; padding:24px; text-align:center;
+}
+#signinScreen .logo, #blockedScreen .logo{font-size:44px;}
+#signinScreen h1, #blockedScreen h1{margin:0; font-size:22px; font-weight:800;}
+#signinScreen p, #blockedScreen p{margin:0; color:var(--ink-soft); font-size:14px; max-width:380px; line-height:1.7;}
+.gbtn{
+  display:flex; align-items:center; gap:10px; background:var(--surface); color:var(--ink);
+  border:1px solid var(--border); border-radius:10px; padding:12px 22px; font-family:inherit;
+  font-size:15px; font-weight:700; cursor:pointer;
+}
+.gbtn:hover{border-color:var(--accent);}
+.gicon{width:20px; height:20px;}
+#blockedScreen{display:none;}
+
+#appScreen{display:none;}
+#appScreen.open{display:block;}
+header{
+  position:sticky; top:0; z-index:5;
+  padding:calc(12px + env(safe-area-inset-top,0px)) 18px 12px;
+  background:var(--surface); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+}
+.h-left{display:flex; align-items:center; gap:10px;}
+.hamburger{background:transparent; border:1px solid var(--border); border-radius:8px; font-size:16px; padding:6px 10px; cursor:pointer; color:var(--ink); line-height:1;}
+h1{font-size:18px; font-weight:800; margin:0;}
+.count{color:var(--ink-soft); font-size:12.5px; font-weight:500;}
+.badge{font-size:11px; font-weight:700; padding:3px 9px; border-radius:99px; white-space:nowrap;}
+.badge.editor{background:color-mix(in srgb, var(--accent) 20%, var(--surface)); color:var(--accent); border:1px solid var(--accent);}
+.badge.viewer{background:color-mix(in srgb, var(--gold) 18%, var(--surface)); color:var(--gold); border:1px solid var(--gold);}
+.user-chip{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--ink-soft);}
+.user-chip img{width:26px; height:26px; border-radius:50%;}
+.signout{background:transparent; border:none; color:var(--ink-soft); font-size:12.5px; cursor:pointer; text-decoration:underline; font-family:inherit;}
+
+/* Admin sidebar */
+.sidebar-overlay{position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; z-index:30;}
+.sidebar-overlay.open{display:block;}
+.sidebar{
+  position:fixed; top:0; right:0; height:100%; width:min(360px,92vw); background:var(--surface);
+  border-left:1px solid var(--border); z-index:31; transform:translateX(100%); transition:transform .2s ease;
+  overflow-y:auto; padding:18px;
+}
+.sidebar.open{transform:translateX(0);}
+.sidebar h2{font-size:16px; margin:0 0 4px;}
+.sidebar p.hint{font-size:12px; color:var(--ink-soft); margin:0 0 14px;}
+.access-form{display:flex; flex-direction:column; gap:8px; margin-bottom:16px; padding-bottom:16px; border-bottom:1px solid var(--border);}
+.access-row{display:flex; gap:8px;}
+.access-row > *{flex:1;}
+.access-list-item{border:1px solid var(--border); border-radius:8px; padding:8px 10px; margin-bottom:8px; font-size:12.5px;}
+.access-list-item .ali-top{display:flex; justify-content:space-between; align-items:center; gap:6px;}
+.access-list-item .ali-meta{color:var(--ink-soft); font-size:11.5px; margin-top:4px;}
+
+.wrap{max-width:1150px; margin:0 auto; padding:16px 18px 40px;}
+.toolbar{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;}
+input[type=text], input[type=search], input[type=number], select, textarea{
+  font-family:inherit; font-size:15px; padding:10px 12px; border-radius:8px;
+  border:1px solid var(--border); background:var(--surface); color:var(--ink); width:100%;
+}
+input:focus, select:focus, textarea:focus, button:focus-visible{ outline:2px solid var(--accent); outline-offset:1px; }
+.search-box{flex:1; min-width:200px;}
+button{ font-family:inherit; font-size:14px; font-weight:600; cursor:pointer; border-radius:8px; border:1px solid transparent; padding:10px 16px; }
+.btn-primary{background:var(--accent); color:var(--accent-ink);}
+.btn-ghost{background:transparent; color:var(--ink); border-color:var(--border);}
+.btn-danger{background:transparent; color:var(--danger); border-color:var(--danger);}
+.btn-sm{padding:6px 10px; font-size:13px;}
+.panel{ background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:16px; display:none; }
+.panel.open{display:block;}
+.grid{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+.grid .full{grid-column:1 / -1;}
+.field label{display:block; font-size:12px; color:var(--ink-soft); margin-bottom:4px; font-weight:600;}
+.plate-row{display:flex; gap:6px; direction:ltr;}
+.plate-row select{text-align:center; padding:8px 4px;}
+.plate-group{margin-bottom:4px;}
+.plate-group-label{font-size:11px; color:var(--ink-soft); margin-bottom:4px; display:block;}
+.panel-actions{display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;}
+table{width:100%; border-collapse:collapse; font-size:13px;}
+th{ text-align:right; font-size:11px; color:var(--ink-soft); font-weight:700; padding:8px 9px; border-bottom:1px solid var(--border); white-space:nowrap; }
+td{padding:8px 9px; border-bottom:1px solid var(--border); vertical-align:middle; white-space:nowrap;}
+tbody tr:nth-child(even){background:var(--row-alt);}
+.table-scroll{overflow-x:auto; border:1px solid var(--border); border-radius:12px;}
+.plate{font-weight:700; letter-spacing:.5px;}
+.actions-cell{display:flex; gap:6px; white-space:nowrap;}
+.empty{text-align:center; padding:40px 10px; color:var(--ink-soft);}
+.empty b{display:block; color:var(--ink); font-size:16px; margin-bottom:6px;}
+.io-row{display:flex; gap:8px; flex-wrap:wrap;}
+#fileInput,#cameraInput,#attachInput{display:none;}
+.thumb{width:36px; height:36px; object-fit:cover; border-radius:6px; cursor:pointer; border:1px solid var(--border);}
+.modal-overlay{position:fixed; inset:0; background:rgba(0,0,0,.55); display:none; align-items:center; justify-content:center; z-index:25; padding:20px;}
+.modal-overlay.open{display:flex;}
+.modal-box{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; max-width:360px; width:100%;}
+.modal-box p{margin:0 0 16px; font-size:15px; line-height:1.6;}
+.modal-actions{display:flex; gap:8px;}
+.hist-overlay{position:fixed; inset:0; background:rgba(0,0,0,.55); display:none; align-items:center; justify-content:center; z-index:25; padding:20px;}
+.hist-overlay.open{display:flex;}
+.hist-box{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:18px; max-width:560px; width:100%; max-height:80vh; overflow-y:auto;}
+.hist-box h3{margin:0 0 12px; font-size:16px;}
+.hist-item{border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin-bottom:8px; font-size:13px;}
+.hist-item .hist-meta{color:var(--ink-soft); font-size:11.5px; margin-bottom:6px; display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap;}
+.hist-item .hist-fields{font-size:12.5px; line-height:1.7; color:var(--ink);}
+.hist-close{display:flex; justify-content:flex-end; margin-top:10px;}
+.lightbox{position:fixed; inset:0; background:rgba(0,0,0,.85); display:none; align-items:center; justify-content:center; z-index:40; padding:20px; cursor:zoom-out;}
+.lightbox.open{display:flex;}
+.lightbox img{max-width:100%; max-height:100%; border-radius:8px;}
+#toast{display:none; margin-bottom:14px; padding:10px 14px; border-radius:8px; font-size:14px; font-weight:600;}
+.toast-info{background:color-mix(in srgb, var(--accent) 15%, var(--surface)); color:var(--ink); border:1px solid var(--accent);}
+.toast-ok{background:color-mix(in srgb, var(--accent) 22%, var(--surface)); color:var(--ink); border:1px solid var(--accent);}
+.toast-err{background:color-mix(in srgb, var(--danger) 18%, var(--surface)); color:var(--ink); border:1px solid var(--danger);}
+@media (max-width:640px){
+  .grid{grid-template-columns:1fr;}
+  .table-scroll table{min-width:1100px;}
+  header{flex-direction:column; align-items:stretch;}
+}
+</style>
+</head>
+<body>
+
+<div id="signinScreen">
+  <div class="logo">🚗</div>
+  <h1>سجل المركبات — المنطقة الشرقية</h1>
+  <p>سجّل الدخول بحساب Google الخاص بعملك للاطلاع على سجل الأسطول. الصلاحيات تُدار تلقائيًا حسب حسابك.</p>
+  <button class="gbtn" id="googleSignInBtn">
+    <svg class="gicon" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 7.9 3l6-6C34.6 5.1 29.6 3 24 3 12.4 3 3 12.4 3 24s9.4 21 21 21 21-9.4 21-21c0-1.4-.1-2.7-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.5 15.9 18.9 13 24 13c3 0 5.8 1.1 7.9 3l6-6C34.6 6.1 29.6 4 24 4c-7.5 0-13.9 4.2-17.7 10.7z"/><path fill="#4CAF50" d="M24 45c5.5 0 10.4-1.9 14.3-5.1l-6.6-5.6c-2 1.4-4.6 2.2-7.7 2.2-5.2 0-9.6-3.3-11.2-7.9l-6.6 5.1C9.9 40.5 16.4 45 24 45z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.2 4.2-4.1 5.6l6.6 5.6C41.5 36.4 44 30.7 44 24c0-1.4-.1-2.7-.4-3.5z"/></svg>
+    تسجيل الدخول بحساب Google
+  </button>
+  <div id="signinErr" style="display:none; color:var(--danger); font-size:13px; max-width:320px;"></div>
+</div>
+
+<div id="blockedScreen">
+  <div class="logo">🔒</div>
+  <h1>الدخول غير متاح لحسابك</h1>
+  <p>حسابك غير مُدرج ضمن قائمة المصرح لهم بالاطلاع على هذا النظام. تواصل مع مسؤول النظام لإضافة إيميلك.</p>
+  <button class="signout" id="blockedSignOutBtn">تسجيل خروج وتجربة حساب آخر</button>
+</div>
+
+<div id="appScreen">
+  <header>
+    <div class="h-left">
+      <button class="hamburger" id="sidebarToggle" style="display:none;">☰</button>
+      <h1>سجل المركبات — المنطقة الشرقية</h1>
+      <span class="count" id="countLabel">0 مركبة</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:14px;">
+      <div class="user-chip">
+        <img id="userPhoto" src="" alt="">
+        <span id="userName"></span>
+        <span class="badge" id="roleBadge"></span>
+      </div>
+      <button class="signout" id="signOutBtn">تسجيل خروج</button>
+    </div>
+  </header>
+
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+  <div class="sidebar" id="sidebar">
+    <h2>إدارة صلاحيات الدخول</h2>
+    <p class="hint">أضف موظف بصلاحية "محرر" (إضافة/تعديل/حذف) أو "مطّلع" (عرض وبحث فقط)، بشكل دائم أو لمدة محددة تنتهي تلقائيًا.</p>
+    <div class="access-form">
+      <input type="text" id="acc_email" placeholder="بريد Gmail الخاص بالموظف">
+      <div class="access-row">
+        <select id="acc_role">
+          <option value="viewer">مطّلع (عرض وبحث فقط)</option>
+          <option value="editor">محرر (كامل الصلاحية)</option>
+        </select>
+        <select id="acc_duration">
+          <option value="permanent">دائم</option>
+          <option value="7">7 أيام</option>
+          <option value="30">30 يوم</option>
+          <option value="90">90 يوم</option>
+        </select>
+      </div>
+      <button class="btn-primary btn-sm" id="acc_addBtn">+ إضافة صلاحية</button>
+    </div>
+    <div id="accessList"></div>
+  </div>
+
+  <div class="wrap">
+    <div id="toast"></div>
+
+    <div class="toolbar">
+      <input class="search-box" type="search" id="searchBox" placeholder="ابحث بأي حقل: لوحة، هيكل، جهة، محافظة...">
+      <span id="editorTools" style="display:none; gap:10px; flex-wrap:wrap;">
+        <button class="btn-ghost" id="cameraBtn">📷 تصوير بطاقة البيانات</button>
+        <button class="btn-primary" id="openAddBtn">+ إضافة يدوية</button>
+      </span>
+    </div>
+    <input type="file" id="cameraInput" accept="image/*" capture="environment">
+    <input type="file" id="attachInput" accept="image/*" capture="environment">
+
+    <div class="io-row" style="margin-bottom:16px;">
+      <button class="btn-ghost btn-sm" id="exportBtn">تصدير نسخة احتياطية (JSON)</button>
+      <button class="btn-ghost btn-sm" id="globalHistBtn">🕘 سجل كل التعديلات</button>
+    </div>
+
+    <div class="panel" id="formPanel">
+      <div class="grid">
+        <div class="field"><label>المحافظة</label>
+          <select id="f_gov"><option value=""></option></select>
+        </div>
+        <div class="field"><label>اسم المستخدم / الجهة</label>
+          <input type="text" id="f_entity" list="entityList" placeholder="مثال: إدارة الصيانة">
+          <datalist id="entityList"></datalist>
+        </div>
+        <div class="field"><label>حالة المركبة</label>
+          <select id="f_status"><option value=""></option></select>
+        </div>
+        <div class="field"><label>نوع التسجيل</label>
+          <select id="f_regType"><option value=""></option></select>
+        </div>
+        <div class="field"><label>نوع الطراز</label><input type="text" id="f_model" placeholder="مثال: تويوتا كامري"></div>
+        <div class="field"><label>سنة الصنع</label><select id="f_year"><option value=""></option></select></div>
+        <div class="field"><label>اللون</label><input type="text" id="f_color" placeholder="مثال: أبيض"></div>
+        <div class="field"><label>رقم الهيكل</label><input type="text" id="f_chassis"></div>
+        <div class="field"><label>الرقم التسلسلي</label><input type="text" id="f_serial"></div>
+        <div class="field"><label>رقم الاستمارة</label><input type="text" id="f_form"></div>
+
+        <div class="field full">
+          <label>رقم اللوحة</label>
+          <div class="plate-group">
+            <span class="plate-group-label">الأحرف (من اليمين لليسار: الأول، الثاني، الثالث)</span>
+            <div class="plate-row" id="plateLettersRow"></div>
+          </div>
+          <div class="plate-group">
+            <span class="plate-group-label">الأرقام (4 خانات)</span>
+            <div class="plate-row" id="plateDigitsRow"></div>
+          </div>
+        </div>
+
+        <div class="field full">
+          <label>نسخة الاستمارة (صورة)</label>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <button type="button" class="btn-ghost btn-sm" id="attachBtn">📎 إرفاق/تصوير صورة الاستمارة</button>
+            <img id="formThumbPreview" class="thumb" style="display:none;">
+            <span id="formThumbNone" style="font-size:12px; color:var(--ink-soft);">لا توجد صورة مرفقة</span>
+          </div>
+        </div>
+
+        <div class="field full"><label>ملاحظات</label><textarea id="f_notes" rows="3"></textarea></div>
+      </div>
+      <div class="panel-actions">
+        <button class="btn-primary" id="saveBtn">حفظ</button>
+        <button class="btn-ghost" id="cancelBtn">إلغاء</button>
+      </div>
+    </div>
+
+    <div class="table-scroll">
+      <table id="vTable">
+        <thead>
+          <tr>
+            <th>المحافظة</th><th>الجهة</th><th>الحالة</th><th>نوع التسجيل</th>
+            <th>الطراز</th><th>اللوحة</th><th>السنة</th><th>اللون</th>
+            <th>الهيكل</th><th>التسلسلي</th><th>الاستمارة</th><th>نسخة الاستمارة</th>
+            <th>ملاحظات</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="vBody"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="emptyState" style="display:none;">
+      <b>لا توجد مركبات مسجلة بعد</b>
+      <span id="emptyHint">اطلب من أحد المخوّلين بالتعديل إضافة أول مركبة.</span>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="confirmOverlay">
+  <div class="modal-box">
+    <p id="confirmMsg"></p>
+    <div class="modal-actions">
+      <button class="btn-danger" id="confirmYes">تأكيد</button>
+      <button class="btn-ghost" id="confirmNo">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<div class="hist-overlay" id="histOverlay">
+  <div class="hist-box">
+    <h3 id="histTitle">سجل التعديلات</h3>
+    <div id="histBody"></div>
+    <div class="hist-close"><button class="btn-ghost btn-sm" id="histCloseBtn">إغلاق</button></div>
+  </div>
+</div>
+
+<div class="lightbox" id="lightbox"><img id="lightboxImg" src=""></div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyCy-k8wUfcizt8DOrjHtxQpTBnKXOv6ESg",
+  authDomain: "vehicle-register-f1c4b.firebaseapp.com",
+  projectId: "vehicle-register-f1c4b",
+  storageBucket: "vehicle-register-f1c4b.firebasestorage.app",
+  messagingSenderId: "257237487200",
+  appId: "1:257237487200:web:f6b44371811a7f3c56fd05"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+const ADMIN_EMAILS = ['vehiclefsf@gmail.com', 'bassam119911@gmail.com'];
+const GOV_LIST = ['القيادة','الدمام','الخبر','القطيف','رأس تنورة','الجبيل','بقيق','الأحساء'];
+const STATUS_LIST = ['جيدة','الصيانة','رجيع','تخزين'];
+const REGTYPE_LIST = ['مدني','استباقي','خدمات','رسمي'];
+const PLATE_LETTERS = ['ا','ب','ح','د','ر','س','ص','ط','ع','ق','ك','ل','م','ن','ه','و','ي'];
+
+let vehicles = [];
+let unsubscribe = null;
+let unsubAccess = null;
+let isAdmin = false;
+let isEditor = false;
+let currentRole = null;
+let editingId = null;
+let formImageData = '';
+
+/* ---------- small utilities ---------- */
+function showToast(msg, kind){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast-' + (kind||'info'); t.style.display = 'block';
+}
+function hideToast(){ document.getElementById('toast').style.display = 'none'; }
+function esc(s){
+  return (s||'').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function askConfirm(msg){
+  return new Promise(resolve=>{
+    document.getElementById('confirmMsg').textContent = msg;
+    const overlay = document.getElementById('confirmOverlay');
+    overlay.classList.add('open');
+    const yesBtn = document.getElementById('confirmYes');
+    const noBtn = document.getElementById('confirmNo');
+    const cleanup = (r)=>{ overlay.classList.remove('open'); yesBtn.onclick=null; noBtn.onclick=null; resolve(r); };
+    yesBtn.onclick = ()=> cleanup(true);
+    noBtn.onclick = ()=> cleanup(false);
+  });
+}
+function fillSelect(sel, items){
+  items.forEach(v=>{ const o=document.createElement('option'); o.value=v; o.textContent=v; sel.appendChild(o); });
+}
+function buildPlateRow(container, options, count, idPrefix){
+  container.innerHTML = '';
+  for(let i=0;i<count;i++){
+    const sel = document.createElement('select');
+    sel.id = idPrefix + i;
+    sel.innerHTML = '<option value="">-</option>' + options.map(o=>`<option value="${o}">${o}</option>`).join('');
+    container.appendChild(sel);
+  }
+}
+buildPlateRow(document.getElementById('plateLettersRow'), PLATE_LETTERS, 3, 'pl_');
+buildPlateRow(document.getElementById('plateDigitsRow'), [0,1,2,3,4,5,6,7,8,9], 4, 'pd_');
+fillSelect(document.getElementById('f_gov'), GOV_LIST);
+fillSelect(document.getElementById('f_status'), STATUS_LIST);
+fillSelect(document.getElementById('f_regType'), REGTYPE_LIST);
+(function fillYears(){
+  const sel = document.getElementById('f_year');
+  const now = new Date().getFullYear();
+  for(let y=now+1; y>=1980; y--){ const o=document.createElement('option'); o.value=y; o.textContent=y; sel.appendChild(o); }
+})();
+
+function setPlateSelects(plateLet, plateNum){
+  const letters = (plateLet||'').split(' ').filter(Boolean);
+  for(let i=0;i<3;i++) document.getElementById('pl_'+i).value = letters[i] || '';
+  const digits = (plateNum||'').split('');
+  for(let i=0;i<4;i++) document.getElementById('pd_'+i).value = digits[i] || '';
+}
+function readPlateSelects(){
+  const letters = [0,1,2].map(i=>document.getElementById('pl_'+i).value).filter(Boolean);
+  const digits = [0,1,2,3].map(i=>document.getElementById('pd_'+i).value).filter(v=>v!=='');
+  return { plateLet: letters.join(' '), plateNum: digits.join('') };
+}
+
+/* ---------- image compression ---------- */
+function compressImage(file, maxW){
+  return new Promise((resolve,reject)=>{
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = e=>{ img.onload = ()=>{
+      const scale = Math.min(1, maxW / img.width);
+      const w = Math.round(img.width*scale), h = Math.round(img.height*scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', 0.5));
+    }; img.onerror = reject; img.src = e.target.result; };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+function setFormThumb(dataUrl){
+  formImageData = dataUrl || '';
+  const img = document.getElementById('formThumbPreview');
+  const none = document.getElementById('formThumbNone');
+  if(formImageData){ img.src = formImageData; img.style.display='inline-block'; none.style.display='none'; }
+  else { img.style.display='none'; none.style.display='inline'; }
+}
+document.getElementById('attachBtn').onclick = ()=> document.getElementById('attachInput').click();
+document.getElementById('attachInput').addEventListener('change', async e=>{
+  const file = e.target.files[0]; e.target.value='';
+  if(!file) return;
+  try{ setFormThumb(await compressImage(file, 900)); }
+  catch(err){ showToast('تعذّر تحميل الصورة.', 'err'); }
+});
+document.getElementById('formThumbPreview').onclick = ()=>{
+  document.getElementById('lightboxImg').src = formImageData;
+  document.getElementById('lightbox').classList.add('open');
+};
+document.getElementById('lightbox').onclick = ()=> document.getElementById('lightbox').classList.remove('open');
+
+/* ---------- render ---------- */
+function render(){
+  const q = document.getElementById('searchBox').value.trim().toLowerCase();
+  const keys = ['gov','entity','status','regType','model','plateNum','plateLet','year','color','chassis','serial','form','notes'];
+  const list = vehicles.filter(v=>{
+    if(!q) return true;
+    return keys.some(k => (v[k]||'').toString().toLowerCase().includes(q));
+  }).sort((a,b)=> (a.gov||'').localeCompare(b.gov||'','ar'));
+
+  const body = document.getElementById('vBody');
+  body.innerHTML = '';
+  list.forEach(v=>{
+    const tr = document.createElement('tr');
+    const actions = isEditor
+      ? `<button class="btn-ghost btn-sm" data-edit="${v.id}">تعديل</button><button class="btn-ghost btn-sm" data-hist="${v.id}">🕘</button><button class="btn-danger btn-sm" data-del="${v.id}">حذف</button>`
+      : `<button class="btn-ghost btn-sm" data-hist="${v.id}">🕘</button>`;
+    const thumb = v.formImageData ? `<img class="thumb" src="${v.formImageData}" data-lightbox="1">` : '';
+    tr.innerHTML = `
+      <td>${esc(v.gov)}</td><td>${esc(v.entity)}</td><td>${esc(v.status)}</td><td>${esc(v.regType)}</td>
+      <td>${esc(v.model)}</td><td class="plate">${esc(v.plateLet)} ${esc(v.plateNum)}</td>
+      <td>${esc(v.year)}</td><td>${esc(v.color)}</td><td>${esc(v.chassis)}</td><td>${esc(v.serial)}</td>
+      <td>${esc(v.form)}</td><td>${thumb}</td><td>${esc(v.notes)}</td>
+      <td class="actions-cell">${actions}</td>`;
+    body.appendChild(tr);
+  });
+  body.querySelectorAll('img[data-lightbox]').forEach(img=>{
+    img.onclick = ()=>{ document.getElementById('lightboxImg').src = img.src; document.getElementById('lightbox').classList.add('open'); };
+  });
+
+  document.getElementById('countLabel').textContent = vehicles.length + ' مركبة' + (q ? ` (عرض ${list.length})` : '');
+  document.getElementById('emptyState').style.display = vehicles.length ? 'none' : 'block';
+  document.getElementById('vTable').style.display = vehicles.length ? '' : 'none';
+}
+
+function openPanel(v){
+  editingId = v ? v.id : null;
+  document.getElementById('f_gov').value = v ? (v.gov||'') : '';
+  document.getElementById('f_entity').value = v ? (v.entity||'') : '';
+  document.getElementById('f_status').value = v ? (v.status||'') : '';
+  document.getElementById('f_regType').value = v ? (v.regType||'') : '';
+  document.getElementById('f_model').value = v ? (v.model||'') : '';
+  document.getElementById('f_year').value = v ? (v.year||'') : '';
+  document.getElementById('f_color').value = v ? (v.color||'') : '';
+  document.getElementById('f_chassis').value = v ? (v.chassis||'') : '';
+  document.getElementById('f_serial').value = v ? (v.serial||'') : '';
+  document.getElementById('f_form').value = v ? (v.form||'') : '';
+  document.getElementById('f_notes').value = v ? (v.notes||'') : '';
+  setPlateSelects(v ? v.plateLet : '', v ? v.plateNum : '');
+  setFormThumb(v ? (v.formImageData||'') : '');
+  document.getElementById('formPanel').classList.add('open');
+}
+function closePanel(){ editingId = null; document.getElementById('formPanel').classList.remove('open'); }
+document.getElementById('openAddBtn').onclick = ()=> openPanel(null);
+document.getElementById('cancelBtn').onclick = closePanel;
+
+/* ---------- entity suggestions (shared, growing list) ---------- */
+let knownEntities = new Set();
+function loadEntities(){
+  db.collection('entities').get().then(snap=>{
+    const dl = document.getElementById('entityList');
+    dl.innerHTML = '';
+    snap.docs.forEach(d=>{
+      const val = d.data().value;
+      if(val){ knownEntities.add(val); const o=document.createElement('option'); o.value=val; dl.appendChild(o); }
+    });
+  }).catch(()=>{});
+}
+async function ensureEntitySaved(value){
+  if(!value || knownEntities.has(value)) return;
+  try{
+    await db.collection('entities').doc(encodeURIComponent(value)).set({value});
+    knownEntities.add(value);
+    const dl = document.getElementById('entityList');
+    const o=document.createElement('option'); o.value=value; dl.appendChild(o);
+  }catch(err){ /* non-critical */ }
+}
+
+/* ---------- history / audit log ---------- */
+const FIELD_KEYS = ['gov','entity','status','regType','model','plateNum','plateLet','year','color','chassis','serial','form','notes'];
+const FIELD_LABELS = {gov:'المحافظة', entity:'الجهة', status:'الحالة', regType:'نوع التسجيل', model:'الطراز', plateNum:'أرقام اللوحة', plateLet:'أحرف اللوحة', year:'السنة', color:'اللون', chassis:'رقم الهيكل', serial:'الرقم التسلسلي', form:'رقم الاستمارة', notes:'ملاحظات'};
+const ACTION_LABELS = {created:'إضافة', updated:'تعديل — الحالة قبل هذا التعديل', deleted:'حذف — آخر بيانات قبل الحذف', restored:'استعادة — الحالة قبل الاستعادة'};
+function pickFields(obj){ const out={}; FIELD_KEYS.forEach(k=> out[k]=obj[k]||''); return out; }
+async function logHistory(vehicleId, action, snapshot){
+  try{
+    await db.collection('vehicle_history').add({
+      vehicleId, action, snapshot: pickFields(snapshot),
+      changedBy: auth.currentUser ? auth.currentUser.email : '',
+      changedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  }catch(err){}
+}
+function fmtTime(ts){
+  if(ts && typeof ts.toDate === 'function') return ts.toDate().toLocaleString('ar-SA', {dateStyle:'medium', timeStyle:'short'});
+  return 'الآن';
+}
+function renderHistItems(entries, container){
+  container.innerHTML = '';
+  if(!entries.length){ container.innerHTML = '<p style="color:var(--ink-soft); font-size:13px;">لا يوجد سجل بعد.</p>'; return; }
+  entries.forEach(entry=>{
+    const div = document.createElement('div'); div.className = 'hist-item';
+    const s = entry.snapshot || {};
+    const fieldsHtml = FIELD_KEYS.filter(k=>s[k]).map(k=> `<div><b>${FIELD_LABELS[k]}:</b> ${esc(s[k])}</div>`).join('') || '<i>لا توجد بيانات محفوظة</i>';
+    const restoreBtn = isEditor ? `<button class="btn-ghost btn-sm" data-restore="${entry.vehicleId}" data-entryid="${entry.id}" style="margin-top:6px;">استعادة هذه الحالة</button>` : '';
+    div.innerHTML = `<div class="hist-meta"><span>${ACTION_LABELS[entry.action]||entry.action}</span><span>${esc(entry.changedBy||'')} — ${fmtTime(entry.changedAt)}</span></div><div class="hist-fields">${fieldsHtml}</div>${restoreBtn}`;
+    container.appendChild(div);
+  });
+}
+async function fetchHistoryEntries(vehicleId){
+  let query = db.collection('vehicle_history');
+  query = vehicleId ? query.where('vehicleId','==',vehicleId) : query.orderBy('changedAt','desc').limit(100);
+  const snap = await query.get();
+  let entries = snap.docs.map(d=> ({id:d.id, ...d.data()}));
+  entries.sort((a,b)=>{
+    const ta = a.changedAt && a.changedAt.toMillis ? a.changedAt.toMillis() : 0;
+    const tb = b.changedAt && b.changedAt.toMillis ? b.changedAt.toMillis() : 0;
+    return tb - ta;
+  });
+  return entries;
+}
+async function openVehicleHistory(vehicleId){
+  document.getElementById('histTitle').textContent = 'سجل تعديلات هذه المركبة';
+  const body = document.getElementById('histBody');
+  body.innerHTML = '<p style="color:var(--ink-soft); font-size:13px;">جارٍ التحميل...</p>';
+  document.getElementById('histOverlay').classList.add('open');
+  try{ renderHistItems(await fetchHistoryEntries(vehicleId), body); }
+  catch(err){ body.innerHTML = '<p style="color:var(--danger); font-size:13px;">تعذّر تحميل السجل.</p>'; }
+}
+document.getElementById('globalHistBtn').onclick = async ()=>{
+  document.getElementById('histTitle').textContent = 'سجل كل التعديلات (آخر 100)';
+  const body = document.getElementById('histBody');
+  body.innerHTML = '<p style="color:var(--ink-soft); font-size:13px;">جارٍ التحميل...</p>';
+  document.getElementById('histOverlay').classList.add('open');
+  try{ renderHistItems(await fetchHistoryEntries(null), body); }
+  catch(err){ body.innerHTML = '<p style="color:var(--danger); font-size:13px;">تعذّر تحميل السجل.</p>'; }
+};
+document.getElementById('histCloseBtn').onclick = ()=> document.getElementById('histOverlay').classList.remove('open');
+document.getElementById('histBody').addEventListener('click', async e=>{
+  const vehicleId = e.target.getAttribute('data-restore');
+  if(!vehicleId) return;
+  const entryId = e.target.getAttribute('data-entryid');
+  const ok = await askConfirm('تأكيد استعادة المركبة لهذه الحالة؟ سيتم استبدال بياناتها الحالية (عدا صورة الاستمارة).');
+  if(!ok) return;
+  try{
+    const entrySnap = await db.collection('vehicle_history').doc(entryId).get();
+    const snapshot = pickFields((entrySnap.data()||{}).snapshot || {});
+    const current = vehicles.find(v=>v.id===vehicleId);
+    if(current) await logHistory(vehicleId, 'restored', current);
+    await db.collection('vehicles').doc(vehicleId).update({
+      ...snapshot, updatedBy: auth.currentUser ? auth.currentUser.email : '',
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    showToast('تمت الاستعادة بنجاح.', 'ok');
+    document.getElementById('histOverlay').classList.remove('open');
+  }catch(err){ showToast('تعذّرت الاستعادة: ' + (err.message||''), 'err'); }
+});
+
+/* ---------- save / edit / delete ---------- */
+document.getElementById('saveBtn').onclick = async ()=>{
+  const plate = readPlateSelects();
+  const data = {
+    gov: document.getElementById('f_gov').value,
+    entity: document.getElementById('f_entity').value.trim(),
+    status: document.getElementById('f_status').value,
+    regType: document.getElementById('f_regType').value,
+    model: document.getElementById('f_model').value.trim(),
+    plateNum: plate.plateNum,
+    plateLet: plate.plateLet,
+    year: document.getElementById('f_year').value,
+    color: document.getElementById('f_color').value.trim(),
+    chassis: document.getElementById('f_chassis').value.trim(),
+    serial: document.getElementById('f_serial').value.trim(),
+    form: document.getElementById('f_form').value.trim(),
+    notes: document.getElementById('f_notes').value.trim(),
+    formImageData: formImageData || '',
+    updatedBy: auth.currentUser ? auth.currentUser.email : '',
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  if(!data.plateNum && !data.chassis){
+    showToast('الرجاء إدخال أرقام اللوحة أو رقم الهيكل على الأقل.', 'err');
+    return;
+  }
+  ensureEntitySaved(data.entity);
+  try{
+    if(editingId){
+      const oldV = vehicles.find(v=>v.id===editingId);
+      await db.collection('vehicles').doc(editingId).update(data);
+      if(oldV) logHistory(editingId, 'updated', oldV);
+    }else{
+      data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+      const ref = await db.collection('vehicles').add(data);
+      logHistory(ref.id, 'created', data);
+    }
+    closePanel();
+    showToast('تم الحفظ بنجاح.', 'ok');
+  }catch(err){ showToast('تعذّر الحفظ: ' + (err.message||'خطأ غير متوقع'), 'err'); }
+};
+
+document.getElementById('vBody').addEventListener('click', async e=>{
+  const editId = e.target.getAttribute('data-edit');
+  const delId = e.target.getAttribute('data-del');
+  const histId = e.target.getAttribute('data-hist');
+  if(editId){ const v = vehicles.find(v=>v.id===editId); if(v) openPanel(v); }
+  if(delId){
+    const v = vehicles.find(v=>v.id===delId);
+    if(v){
+      const ok = await askConfirm(`تأكيد حذف المركبة (لوحة ${v.plateLet||'-'} ${v.plateNum||''})؟`);
+      if(ok){
+        try{ await db.collection('vehicles').doc(delId).delete(); logHistory(delId, 'deleted', v); showToast('تم حذف المركبة.', 'ok'); }
+        catch(err){ showToast('تعذّر الحذف: ' + (err.message||''), 'err'); }
+      }
+    }
+  }
+  if(histId) openVehicleHistory(histId);
+});
+
+document.getElementById('searchBox').addEventListener('input', render);
+document.getElementById('exportBtn').onclick = ()=>{
+  const blob = new Blob([JSON.stringify(vehicles,null,2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'vehicles-backup-' + new Date().toISOString().slice(0,10) + '.json'; a.click();
+  URL.revokeObjectURL(url);
+};
+
+/* ---------- OCR camera capture ---------- */
+function extractFields(text){
+  const r = {model:'', plateNum:'', plateLet:'', form:'', chassis:'', year:'', color:''};
+  let m = text.match(/(?:هيكل|الهيكل|VIN)[^A-Za-z0-9]{0,8}([A-Za-z0-9]{6,17})/i);
+  if(m) r.chassis = m[1]; else { m = text.match(/\b[A-HJ-NPR-Z0-9]{11,17}\b/); if(m) r.chassis = m[0]; }
+  m = text.match(/استمارة[^\d]{0,8}(\d{6,12})/); if(m) r.form = m[1];
+  m = text.match(/(?:رقم اللوحة|اللوحة)[^\d]{0,8}(\d{1,4})/); if(m) r.plateNum = m[1];
+  m = text.match(/(?:أحرف اللوحة|الأحرف)[^\u0621-\u064A]{0,8}([\u0621-\u064A](?:\s?[\u0621-\u064A]){0,3})/); if(m) r.plateLet = m[1].trim();
+  m = text.match(/(?:الطراز|الفئة|الموديل)[:\s]{0,6}([^\n\r]{2,30})/); if(m) r.model = m[1].trim();
+  m = text.match(/(?:سنة الصنع|الموديل السنوي)[:\s]{0,6}(\d{4})/); if(m) r.year = m[1];
+  m = text.match(/(?:اللون)[:\s]{0,6}([^\n\r]{2,15})/); if(m) r.color = m[1].trim();
+  return r;
+}
+document.getElementById('cameraBtn').onclick = ()=> document.getElementById('cameraInput').click();
+document.getElementById('cameraInput').addEventListener('change', async e=>{
+  const file = e.target.files[0]; e.target.value = '';
+  if(!file) return;
+  if(typeof Tesseract === 'undefined'){ showToast('تعذّر تحميل محرك القراءة. تحقق من الاتصال بالإنترنت.', 'err'); return; }
+  showToast('جارٍ قراءة بطاقة البيانات...', 'info');
+  try{
+    const imgData = await compressImage(file, 900);
+    const { data:{ text } } = await Tesseract.recognize(file, 'ara+eng', {
+      logger: msg=>{ if(msg.status==='recognizing text') showToast(`جارٍ القراءة... ${Math.round((msg.progress||0)*100)}%`, 'info'); }
+    });
+    const f = extractFields(text);
+    const data = {
+      gov:'', entity:'', status:'', regType:'', model:f.model, plateNum:f.plateNum, plateLet:f.plateLet,
+      year:f.year, color:f.color, chassis:f.chassis, serial:'', form:f.form, formImageData: imgData,
+      notes: 'نص مستخرج تلقائيًا من الصورة (راجعه لو نقص شيء):\n' + text.trim().slice(0,600),
+      updatedBy: auth.currentUser.email,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    const ref = await db.collection('vehicles').add(data);
+    logHistory(ref.id, 'created', data);
+    showToast('تمت إضافة المركبة من الصورة. راجع الحقول قبل الإغلاق.', 'ok');
+    openPanel({id: ref.id, ...data});
+  }catch(err){ showToast('تعذّرت قراءة الصورة، جرّب صورة أوضح أو أضف يدويًا.', 'err'); }
+});
+
+/* ---------- Access management (admin sidebar) ---------- */
+document.getElementById('sidebarToggle').onclick = ()=>{
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('sidebarOverlay').classList.add('open');
+};
+document.getElementById('sidebarOverlay').onclick = ()=>{
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarOverlay').classList.remove('open');
+};
+
+function fmtAccessExpiry(expiresAt){
+  if(!expiresAt) return 'دائم';
+  if(typeof expiresAt.toDate === 'function') return 'ينتهي: ' + expiresAt.toDate().toLocaleDateString('ar-SA');
+  return 'دائم';
+}
+function renderAccessList(docs){
+  const container = document.getElementById('accessList');
+  container.innerHTML = '';
+  if(!docs.length){ container.innerHTML = '<p style="color:var(--ink-soft); font-size:12.5px;">لا يوجد أحد مُضاف بعد.</p>'; return; }
+  docs.forEach(d=>{
+    const data = d.data();
+    const div = document.createElement('div'); div.className = 'access-list-item';
+    const roleTxt = data.role === 'editor' ? 'محرر' : 'مطّلع';
+    div.innerHTML = `<div class="ali-top"><span>${esc(d.id)}</span><button class="btn-danger btn-sm" data-removeacc="${esc(d.id)}">حذف</button></div>
+      <div class="ali-meta">${roleTxt} — ${fmtAccessExpiry(data.expiresAt)}</div>`;
+    container.appendChild(div);
+  });
+}
+function loadAccessList(){
+  if(unsubAccess) unsubAccess();
+  unsubAccess = db.collection('access').onSnapshot(snap=> renderAccessList(snap.docs), err=>{});
+}
+document.getElementById('acc_addBtn').onclick = async ()=>{
+  const email = document.getElementById('acc_email').value.trim().toLowerCase();
+  const role = document.getElementById('acc_role').value;
+  const duration = document.getElementById('acc_duration').value;
+  if(!email || !email.includes('@')){ showToast('أدخل بريد Gmail صحيح.', 'err'); return; }
+  let expiresAt = null;
+  if(duration !== 'permanent'){
+    const days = parseInt(duration, 10);
+    expiresAt = firebase.firestore.Timestamp.fromDate(new Date(Date.now() + days*86400000));
+  }
+  try{
+    await db.collection('access').doc(email).set({
+      role, expiresAt, addedBy: auth.currentUser.email, addedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    document.getElementById('acc_email').value = '';
+    showToast('تمت إضافة الصلاحية.', 'ok');
+  }catch(err){ showToast('تعذّرت الإضافة: ' + (err.message||''), 'err'); }
+};
+document.getElementById('accessList').addEventListener('click', async e=>{
+  const email = e.target.getAttribute('data-removeacc');
+  if(!email) return;
+  const ok = await askConfirm(`تأكيد إزالة صلاحية ${email}؟`);
+  if(!ok) return;
+  try{ await db.collection('access').doc(email).delete(); showToast('تمت الإزالة.', 'ok'); }
+  catch(err){ showToast('تعذّرت الإزالة: ' + (err.message||''), 'err'); }
+});
+
+/* ---------- Auth ---------- */
+document.getElementById('googleSignInBtn').onclick = ()=>{
+  const provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider).catch(err=>{
+    const box = document.getElementById('signinErr');
+    box.style.display = 'block';
+    box.textContent = 'تعذّر تسجيل الدخول: ' + (err.message || 'حاول مرة أخرى.');
+  });
+};
+document.getElementById('signOutBtn').onclick = ()=> auth.signOut();
+document.getElementById('blockedSignOutBtn').onclick = ()=> auth.signOut();
+
+function showScreen(name){
+  document.getElementById('signinScreen').style.display = name==='signin' ? 'flex' : 'none';
+  document.getElementById('blockedScreen').style.display = name==='blocked' ? 'flex' : 'none';
+  document.getElementById('appScreen').classList.toggle('open', name==='app');
+}
+
+auth.onAuthStateChanged(async user=>{
+  if(unsubscribe){ unsubscribe(); unsubscribe = null; }
+  if(unsubAccess){ unsubAccess(); unsubAccess = null; }
+  if(!user){ showScreen('signin'); vehicles = []; return; }
+
+  isAdmin = ADMIN_EMAILS.includes(user.email);
+  let allowed = isAdmin;
+  currentRole = isAdmin ? 'editor' : null;
+
+  if(!isAdmin){
+    try{
+      const accDoc = await db.collection('access').doc(user.email).get();
+      if(accDoc.exists){
+        const d = accDoc.data();
+        const notExpired = !d.expiresAt || d.expiresAt.toMillis() > Date.now();
+        if(notExpired){ allowed = true; currentRole = d.role; }
+      }
+    }catch(err){ /* treat as not allowed */ }
+  }
+
+  if(!allowed){ showScreen('blocked'); return; }
+
+  isEditor = isAdmin || currentRole === 'editor';
+  showScreen('app');
+  document.getElementById('userPhoto').src = user.photoURL || '';
+  document.getElementById('userName').textContent = user.displayName || user.email;
+  const badge = document.getElementById('roleBadge');
+  badge.textContent = isEditor ? 'صلاحية تعديل' : 'اطلاع وبحث فقط';
+  badge.className = 'badge ' + (isEditor ? 'editor' : 'viewer');
+  document.getElementById('editorTools').style.display = isEditor ? 'flex' : 'none';
+  document.getElementById('sidebarToggle').style.display = isAdmin ? 'inline-block' : 'none';
+
+  loadEntities();
+  if(isAdmin) loadAccessList();
+
+  unsubscribe = db.collection('vehicles').onSnapshot(snap=>{
+    vehicles = snap.docs.map(d=> ({id:d.id, ...d.data()}));
+    render();
+  }, err=>{ showToast('تعذّر تحميل البيانات: ' + (err.message||''), 'err'); });
+});
+</script>
+</body>
+</html>
