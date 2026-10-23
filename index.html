@@ -525,7 +525,6 @@ tbody tr:nth-child(even){background:var(--row-alt);}
   <div class="hist-box">
     <h3 id="histTitle">سجل التعديلات</h3>
     <div id="histBody"></div>
-    <div class="hist-close"><button class="btn-ghost btn-sm" id="histCloseBtn">إغلاق</button></div>
   </div>
 </div>
 
@@ -996,7 +995,12 @@ document.getElementById('globalHistBtn').onclick = async ()=>{
   try{ renderHistItems(await fetchHistoryEntries(null), body); }
   catch(err){ body.innerHTML = '<p style="color:var(--danger); font-size:13px;">تعذّر تحميل السجل.</p>'; }
 };
-document.getElementById('histCloseBtn').onclick = ()=> document.getElementById('histOverlay').classList.remove('open');
+// الضغط في أي مكان يقفل السجل (عدا زر «استعادة هذه الحالة»)
+document.getElementById('histOverlay').addEventListener('click', e=>{
+  if(e.target.closest('[data-restore]')) return;
+  document.getElementById('histOverlay').classList.remove('open');
+});
+document.addEventListener('keydown', e=>{ if(e.key === 'Escape') document.getElementById('histOverlay').classList.remove('open'); });
 document.getElementById('histBody').addEventListener('click', async e=>{
   const vehicleId = e.target.getAttribute('data-restore');
   if(!vehicleId) return;
