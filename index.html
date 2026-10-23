@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <title>سجل المركبات</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -428,6 +430,8 @@ tbody tr:nth-child(even){background:var(--row-alt);}
 
     <div class="io-row" style="margin-bottom:16px;">
       <button class="btn-ghost btn-sm" id="exportBtn">تصدير نسخة احتياطية (JSON)</button>
+      <button class="btn-ghost btn-sm" id="importBtn" style="display:none;">⬆️ استيراد نسخة احتياطية</button>
+      <input type="file" id="importInput" accept="application/json,.json" style="display:none;">
       <button class="btn-ghost btn-sm" id="globalHistBtn">🕘 سجل كل التعديلات</button>
     </div>
 
@@ -569,6 +573,12 @@ tbody tr:nth-child(even){background:var(--row-alt);}
 </div>
 
 <script>
+/* ================================================================
+   ⚙️ إعدادات الجهة — عدّل هذا القسم فقط عند التركيب
+   (راجع «دليل التركيب» — الخطوة 4)
+   ================================================================ */
+// 1) إعدادات مشروع Firebase الخاص بالجهة:
+//    Firebase Console ← Project settings ← General ← Your apps ← SDK setup and configuration ← Config
 const firebaseConfig = {
   apiKey: "AIzaSyCy-k8wUfcizt8DOrjHtxQpTBnKXOv6ESg",
   authDomain: "vehicle-register-f1c4b.firebaseapp.com",
@@ -577,12 +587,15 @@ const firebaseConfig = {
   messagingSenderId: "257237487200",
   appId: "1:257237487200:web:f6b44371811a7f3c56fd05"
 };
+// 2) إيميلات مسؤولي النظام (صلاحية كاملة + إدارة صلاحيات الموظفين).
+//    ⚠️ لازم تكون نفس الإيميلات المكتوبة في ملف firestore.rules داخل isAdmin()
+const ADMIN_EMAILS = ['vehiclefsf@gmail.com', 'bassam119911@gmail.com'];
+/* ================================================================ */
+
 firebase.initializeApp(firebaseConfig);
 window.FIREBASE_CONFIG = firebaseConfig;
 const auth = firebase.auth();
 const db = firebase.firestore();
-
-const ADMIN_EMAILS = ['vehiclefsf@gmail.com', 'bassam119911@gmail.com'];
 const GOV_LIST = ['القيادة','الدمام','الخبر','القطيف','رأس تنورة','الجبيل','بقيق','الأحساء','الخفجي'];
 const STATUS_LIST = ['جيدة','الصيانة','رجيع','تخزين'];
 const REGTYPE_LIST = ['مدني','استباقي','خدمات','رسمي'];
@@ -701,7 +714,7 @@ function compressImage(file, maxW, quality){
   });
 }
 function setFormThumb(dataUrl){
-  formImageData = dataUrl || '';
+  formImageData = safeImg(dataUrl) ? dataUrl : '';
   const img = document.getElementById('formThumbPreview');
   const none = document.getElementById('formThumbNone');
   if(formImageData){ img.src = formImageData; img.style.display='inline-block'; none.style.display='none'; }
@@ -803,6 +816,7 @@ document.getElementById('govTabs').addEventListener('click', e=>{
 });
 
 /* ---------- render ---------- */
+function safeImg(u){ return typeof u === 'string' && /^data:image\/(jpeg|jpg|png|webp|gif);base64,[A-Za-z0-9+\/=\s]+$/.test(u); }
 function render(){
   const q = document.getElementById('searchBox').value.trim().toLowerCase();
   const keys = ['gov','entity','userName','status','regType','model','plateNum','plateLet','year','color','chassis','serial','form','notes'];
@@ -822,9 +836,9 @@ function render(){
   list.forEach(v=>{
     const tr = document.createElement('tr');
     const actions = canEditGovClient(v.gov)
-      ? `<button class="btn-ghost btn-sm" data-edit="${v.id}">تعديل</button><button class="btn-ghost btn-sm" data-hist="${v.id}">🕘</button><button class="btn-danger btn-sm" data-del="${v.id}">حذف</button>`
-      : `<button class="btn-ghost btn-sm" data-hist="${v.id}">🕘</button>`;
-    const thumb = v.formImageData ? `<img class="thumb" src="${v.formImageData}" data-lightbox="1">` : '';
+      ? `<button class="btn-ghost btn-sm" data-edit="${esc(v.id)}">تعديل</button><button class="btn-ghost btn-sm" data-hist="${esc(v.id)}">🕘</button><button class="btn-danger btn-sm" data-del="${esc(v.id)}">حذف</button>`
+      : `<button class="btn-ghost btn-sm" data-hist="${esc(v.id)}">🕘</button>`;
+    const thumb = safeImg(v.formImageData) ? `<img class="thumb" src="${esc(v.formImageData)}" data-lightbox="1">` : '';
     tr.innerHTML = `
       <td>${esc(v.gov)}</td><td>${esc(v.entity)}</td><td>${esc(v.userName)}</td><td>${esc(v.status)}</td><td>${esc(v.regType)}</td>
       <td>${esc(v.model)}</td><td class="plate">${esc(v.plateLet)} ${esc(v.plateNum)}</td>
@@ -907,7 +921,8 @@ async function logHistory(vehicleId, action, snapshot, gov){
     await db.collection('vehicle_history').add({
       vehicleId, action, snapshot: pickFields(snapshot),
       gov: gov != null ? gov : (snapshot.gov || ''),
-      changedBy: myName || (auth.currentUser ? auth.currentUser.email : ''),
+      changedBy: myName,
+      changedByUid: auth.currentUser ? auth.currentUser.uid : '',
       changedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
   }catch(err){}
@@ -922,6 +937,17 @@ function fmtTime(ts){
   if(ts && typeof ts.toDate === 'function') return fmtFull(ts.toDate());
   return 'الآن';
 }
+// أسماء المستخدمين القدامى (السجلات اللي انحفظت بالإيميل قبل تفعيل الأسماء)
+let nameMap = {};
+async function loadNames(){
+  try{ const sn = await db.collection('names').get(); nameMap = {}; sn.docs.forEach(d=> nameMap[d.id.toLowerCase()] = (d.data()||{}).name || ''); }catch(e){}
+}
+function displayName(who){
+  who = String(who || '');
+  if(!who.includes('@')) return who;
+  const n = nameMap[who.toLowerCase()];
+  return n || 'مستخدم سابق';
+}
 function renderHistItems(entries, container){
   container.innerHTML = '';
   if(!entries.length){ container.innerHTML = '<p style="color:var(--ink-soft); font-size:13px;">لا يوجد سجل بعد.</p>'; return; }
@@ -929,12 +955,13 @@ function renderHistItems(entries, container){
     const div = document.createElement('div'); div.className = 'hist-item';
     const s = entry.snapshot || {};
     const fieldsHtml = FIELD_KEYS.filter(k=>s[k]).map(k=> `<div><b>${FIELD_LABELS[k]}:</b> ${esc(s[k])}</div>`).join('') || '<i>لا توجد بيانات محفوظة</i>';
-    const restoreBtn = canEditGovClient((entry.snapshot||{}).gov || entry.gov) ? `<button class="btn-ghost btn-sm" data-restore="${entry.vehicleId}" data-entryid="${entry.id}" style="margin-top:6px;">استعادة هذه الحالة</button>` : '';
-    div.innerHTML = `<div class="hist-meta"><span>${ACTION_LABELS[entry.action]||entry.action}</span><span>${esc(entry.changedBy||'')} — ${fmtTime(entry.changedAt)}</span></div><div class="hist-fields">${fieldsHtml}</div>${restoreBtn}`;
+    const restoreBtn = canEditGovClient((entry.snapshot||{}).gov || entry.gov) ? `<button class="btn-ghost btn-sm" data-restore="${esc(entry.vehicleId)}" data-entryid="${esc(entry.id)}" style="margin-top:6px;">استعادة هذه الحالة</button>` : '';
+    div.innerHTML = `<div class="hist-meta"><span>${esc(ACTION_LABELS[entry.action]||entry.action)}</span><span>${esc(displayName(entry.changedBy))} — ${fmtTime(entry.changedAt)}</span></div><div class="hist-fields">${fieldsHtml}</div>${restoreBtn}`;
     container.appendChild(div);
   });
 }
 async function fetchHistoryEntries(vehicleId){
+  await loadNames();
   const col = db.collection('vehicle_history');
   let docs = [];
   if(allGov){
@@ -1058,12 +1085,116 @@ document.getElementById('vBody').addEventListener('click', async e=>{
 });
 
 document.getElementById('searchBox').addEventListener('input', render);
-document.getElementById('exportBtn').onclick = ()=>{
-  const blob = new Blob([JSON.stringify(vehicles,null,2)], {type:'application/json'});
+/* ---------- تصدير / استيراد النسخة الاحتياطية ---------- */
+const IMPORT_FIELDS = ['gov','entity','userName','status','regType','model','plateNum','plateLet','year','color','chassis','serial','form','notes','formImageData'];
+function downloadJSON(obj, name){
+  const blob = new Blob([JSON.stringify(obj,null,2)], {type:'application/json'});
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = 'vehicles-backup-' + new Date().toISOString().slice(0,10) + '.json'; a.click();
-  URL.revokeObjectURL(url);
+  const a = document.createElement('a'); a.href = url; a.download = name; a.click();
+  setTimeout(()=> URL.revokeObjectURL(url), 1000);
+}
+document.getElementById('exportBtn').onclick = async ()=>{
+  const backup = {
+    format: 'vehicle-registry-backup', version: 2,
+    exportedAt: new Date().toISOString(),
+    exportedBy: auth.currentUser ? auth.currentUser.email : '',
+    vehicles: vehicles.map(v=>{ const o = {id: v.id}; IMPORT_FIELDS.forEach(k=> o[k] = v[k] || ''); return o; })
+  };
+  if(isAdmin){
+    try{
+      const snap = await db.collection('access').get();
+      backup.access = snap.docs.map(d=>{
+        const x = d.data();
+        return { email: d.id, role: x.role || 'viewer', expiresAt: x.expiresAt && x.expiresAt.toDate ? x.expiresAt.toDate().toISOString() : null };
+      });
+    }catch(err){ /* غير ضروري */ }
+  }
+  downloadJSON(backup, 'vehicles-backup-' + new Date().toISOString().slice(0,10) + '.json');
+  showToast(`تم تصدير ${backup.vehicles.length} مركبة` + (backup.access ? ` و ${backup.access.length} صلاحية` : '') + '.', 'ok');
 };
+
+document.getElementById('importBtn').onclick = ()=> document.getElementById('importInput').click();
+document.getElementById('importInput').addEventListener('change', async e=>{
+  const file = e.target.files[0]; e.target.value = '';
+  if(!file || !isAdmin) return;
+  let parsed;
+  try{ parsed = JSON.parse(await file.text()); }
+  catch(err){ showToast('الملف غير صالح — اختر ملف النسخة الاحتياطية (.json) المصدّر من البرنامج.', 'err'); return; }
+
+  // يقبل الصيغة القديمة (قائمة مركبات) والصيغة الجديدة (كائن فيه vehicles و access)
+  const incoming = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.vehicles) ? parsed.vehicles : null);
+  const accessIn = Array.isArray(parsed) ? [] : Array.isArray(parsed.access) ? parsed.access
+    : (parsed.collections && Array.isArray(parsed.collections.access)) ? parsed.collections.access.map(x=> ({email: x.id, role: x.role, expiresAt: x.expiresAt})) : [];
+  if(!incoming){ showToast('ما لقيت بيانات مركبات داخل الملف.', 'err'); return; }
+
+  const clean = incoming.map(v=>{
+    const o = {};
+    IMPORT_FIELDS.forEach(k=> o[k] = (v && v[k] != null) ? String(v[k]) : '');
+    o.chassis = o.chassis.trim().toUpperCase();
+    if(!safeImg(o.formImageData)) o.formImageData = '';
+    const id = v && typeof v.id === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(v.id) ? v.id : '';
+    Object.defineProperty(o, '_id', {value: id, enumerable: false});
+    return o;
+  }).filter(o=> o.chassis || o.plateNum || o.model);
+
+  const key = o=> o.chassis ? 'c:' + o.chassis : 'p:' + o.plateLet + '|' + o.plateNum;
+  const existing = new Set(vehicles.map(v=> key({chassis:(v.chassis||'').toUpperCase(), plateLet:v.plateLet||'', plateNum:v.plateNum||''})));
+  const seen = new Set();
+  const existingIds = new Set(vehicles.map(v=> v.id));
+  const fresh = clean.filter(o=>{ const k = key(o); if((o._id && existingIds.has(o._id)) || existing.has(k) || seen.has(k)) return false; seen.add(k); return true; });
+  const skipped = clean.length - fresh.length;
+
+  const msg = `الملف فيه ${clean.length} مركبة` +
+    (skipped ? ` — ${skipped} منها موجودة مسبقًا أو مكررة وبيتم تجاهلها` : '') +
+    `. سيتم إضافة ${fresh.length} مركبة` +
+    (accessIn.length ? ` و ${accessIn.length} صلاحية دخول` : '') + '. متابعة؟';
+  // مركبات موجودة لكن بدون صورة استمارة، والصورة موجودة في النسخة → نكمّل الصورة فقط
+  const byId = new Map(vehicles.map(v=> [v.id, v]));
+  const fillImg = clean.filter(o=> o._id && byId.has(o._id) && !byId.get(o._id).formImageData && o.formImageData);
+  if(!fresh.length && !accessIn.length && !fillImg.length){ showToast('كل المركبات في الملف موجودة مسبقًا. ما فيه شيء جديد للاستيراد.', 'info'); return; }
+  if(!(await askConfirm(msg + (fillImg.length ? ` (وإكمال صور استمارات ${fillImg.length} مركبة)` : '')))) return;
+  let imgDone = 0;
+  for(const o of fillImg){
+    try{ await db.collection('vehicles').doc(o._id).update({formImageData: o.formImageData}); imgDone++; }catch(err){ console.error('img fill failed', err); }
+  }
+  if(imgDone && !fresh.length && !accessIn.length){ showToast(`✅ تم إكمال صور ${imgDone} مركبة.`, 'ok'); return; }
+
+  const me = myName || (auth.currentUser ? auth.currentUser.email : '');
+  const ts = firebase.firestore.FieldValue.serverTimestamp();
+  let done = 0, failed = 0;
+  const CHUNK = 20; // دفعات صغيرة لأن صور الاستمارات كبيرة الحجم
+  for(let i=0; i<fresh.length; i+=CHUNK){
+    const part = fresh.slice(i, i+CHUNK);
+    const batch = db.batch();
+    const refs = part.map(o=>{
+      const ref = o._id ? db.collection('vehicles').doc(o._id) : db.collection('vehicles').doc();
+      batch.set(ref, {...o, createdAt: ts, updatedAt: ts, updatedBy: me, importedFrom: String(file.name).slice(0,120)});
+      return ref;
+    });
+    try{
+      await batch.commit();
+      done += part.length;
+      part.forEach((o, j)=> logHistory(refs[j].id, 'created', o));
+    }catch(err){ failed += part.length; console.error('import batch failed', err); }
+    showToast(`⏳ جارٍ الاستيراد... ${done + failed} / ${fresh.length}`, 'info');
+  }
+  [...new Set(fresh.map(o=> o.entity).filter(Boolean))].forEach(ensureEntitySaved);
+
+  let accDone = 0;
+  for(const a of accessIn){
+    const email = String(a.email||'').trim().toLowerCase();
+    if(!email.includes('@')) continue;
+    try{
+      await db.collection('access').doc(email).set({
+        role: a.role === 'editor' ? 'editor' : 'viewer',
+        expiresAt: a.expiresAt ? firebase.firestore.Timestamp.fromDate(new Date(a.expiresAt)) : null,
+        addedBy: me, addedAt: ts
+      });
+      accDone++;
+    }catch(err){ console.error('import access failed', email, err); }
+  }
+  showToast(`✅ تم استيراد ${done} مركبة` + (accDone ? ` و ${accDone} صلاحية` : '') + (failed ? ` — ⚠️ فشل ${failed}` : '') + (skipped ? ` — تم تجاهل ${skipped} مكررة` : '') + '.', failed ? 'err' : 'ok');
+});
 
 /* ---------- قراءة رخصة السير (الاستمارة) ---------- */
 const AR_DIGITS = {'٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9','۰':'0','۱':'1','۲':'2','۳':'3','۴':'4','۵':'5','۶':'6','۷':'7','۸':'8','۹':'9'};
@@ -1398,7 +1529,11 @@ function forcePasswordChange(user){
 async function ensureProfile(user){
   let name = '';
   try{ const p = await db.collection('profiles').doc(user.uid).get(); if(p.exists) name = p.data().name || ''; }catch(e){}
-  if(!name && staffMe && staffMe.name) name = staffMe.name;
+  if(!name && staffMe && staffMe.name){
+    name = staffMe.name;
+    // حساب أُعيد تعيينه: ننقل الاسم لملفه الجديد
+    try{ await db.collection('profiles').doc(user.uid).set({name, updatedAt: firebase.firestore.FieldValue.serverTimestamp()}); }catch(e){}
+  }
   if(name) return name;
   return new Promise(resolve=>{
     const ov = document.getElementById('profileOverlay'); ov.classList.add('open');
@@ -1586,12 +1721,12 @@ function renderStaffList(docs){
       <div class="si-meta">الهوية: <span dir="ltr">${esc(d.nid||'')}</span> — ${esc(d.gov)} — ${exp}${d.mustChangePassword ? ' — <span style="color:var(--gold)">لم يدخل بعد</span>' : ''}</div>
       ${d.allScope && d.allScope !== 'none' ? `<div class="si-meta">🌐 ${SCOPE_TXT[d.allScope]}</div>` : ''}
       ${can ? `<div class="si-actions">
-        <button class="btn-danger btn-sm" data-revoke="${d.uid}">إلغاء الصلاحية</button>
-        <button class="btn-ghost btn-sm" data-reset="${d.uid}">إعادة تعيين كلمة المرور</button>
+        <button class="btn-danger btn-sm" data-revoke="${esc(d.uid)}">إلغاء الصلاحية</button>
+        <button class="btn-ghost btn-sm" data-reset="${esc(d.uid)}">إعادة تعيين كلمة المرور</button>
       </div>` : ''}
       ${(isAdmin && d.role === 'manager' && d.gov === HQ) ? `<div class="grant-box">
         <div class="gb-title">الصلاحية على باقي المحافظات</div>
-        <div class="grant-row"><select data-scope="${d.uid}">
+        <div class="grant-row"><select data-scope="${esc(d.uid)}">
           ${['none','view','edit'].map(v=> `<option value="${v}" ${ (d.allScope||'none') === v ? 'selected' : ''}>${v === 'none' ? 'بدون (القيادة فقط)' : SCOPE_TXT[v]}</option>`).join('')}
         </select></div>
       </div>` : ''}
@@ -1604,17 +1739,17 @@ function grantBoxHtml(d){
   const mine = allGrants.filter(g=> g.uid === d.uid);
   const chips = mine.map(g=>{
     const exp = !g.exp ? 'دائم' : (grantValid(g) ? 'حتى ' + fmtFull(g.exp.toDate()).split(' — ')[0] : '<span style="color:var(--danger)">منتهية</span>');
-    return `<div class="grant-chip"><span><b>${esc(g.gov)}</b> — ${LVL_TXT[g.lvl]} — ${exp}</span><button class="btn-danger btn-sm" data-ungrant="${esc(d.uid + '_' + g.gov)}">إلغاء</button></div>`;
+    return `<div class="grant-chip"><span><b>${esc(g.gov)}</b> — ${esc(LVL_TXT[g.lvl]||'')} — ${exp}</span><button class="btn-danger btn-sm" data-ungrant="${esc(d.uid + '_' + g.gov)}">إلغاء</button></div>`;
   }).join('');
   const govOpts = GOV_LIST.filter(g=> g !== HQ).map(g=> `<option value="${g}">${g}</option>`).join('');
   return `<div class="grant-box">
     <div class="gb-title">صلاحية إضافية لمحافظة معيّنة</div>
     ${chips}
     <div class="grant-row">
-      <select data-ggov="${d.uid}">${govOpts}</select>
-      <select data-glvl="${d.uid}"><option value="view">اطلاع</option><option value="edit">اطلاع وتعديل</option></select>
-      <select data-gdur="${d.uid}"><option value="1">يوم</option><option value="7">7 أيام</option><option value="90">90 يوم</option><option value="permanent">دائم</option></select>
-      <button class="btn-primary btn-sm" data-grant="${d.uid}">منح</button>
+      <select data-ggov="${esc(d.uid)}">${govOpts}</select>
+      <select data-glvl="${esc(d.uid)}"><option value="view">اطلاع</option><option value="edit">اطلاع وتعديل</option></select>
+      <select data-gdur="${esc(d.uid)}"><option value="1">يوم</option><option value="7">7 أيام</option><option value="90">90 يوم</option><option value="permanent">دائم</option></select>
+      <button class="btn-primary btn-sm" data-grant="${esc(d.uid)}">منح</button>
     </div>
   </div>`;
 }
@@ -1742,6 +1877,10 @@ auth.onAuthStateChanged(async user=>{
 
   if(authKind === 'staff' && staffMe.mustChangePassword) await forcePasswordChange(user);
   myName = await ensureProfile(user);
+  // ربط الإيميل بالاسم الرباعي (عشان السجلات القديمة تظهر بالاسم بدل الإيميل)
+  if(user.emailVerified && user.email && !user.email.endsWith('@' + ID_EMAIL_DOMAIN)){
+    db.collection('names').doc(user.email.toLowerCase()).set({name: myName, updatedAt: firebase.firestore.FieldValue.serverTimestamp()}).catch(()=>{});
+  }
 
   showScreen('app');
   const photo = document.getElementById('userPhoto');
@@ -1788,11 +1927,11 @@ auth.onAuthStateChanged(async user=>{
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
 import { getAI, getGenerativeModel, GoogleAIBackend } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-ai.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app-check.js";
-// مفتاح reCAPTCHA Enterprise / Fraud Defense العام (Site key) — يثبت أن الطلبات جاية من موقع النظام
+// ⚙️ مفتاح reCAPTCHA Enterprise / Fraud Defense العام (Site key) الخاص بالجهة — راجع دليل التركيب الخطوة 8
 const RECAPTCHA_SITE_KEY = "6LdWy_wtAAAAAOAnSTnDKSXUMxMGq-mm1jnSOTTh";
 try{
   const aiApp = initializeApp(window.FIREBASE_CONFIG, 'card-reader');
-  if(RECAPTCHA_SITE_KEY) initializeAppCheck(aiApp, { provider: new ReCaptchaEnterpriseProvider(RECAPTCHA_SITE_KEY), isTokenAutoRefreshEnabled: true });
+  if(RECAPTCHA_SITE_KEY && !RECAPTCHA_SITE_KEY.startsWith('ضع_')) initializeAppCheck(aiApp, { provider: new ReCaptchaEnterpriseProvider(RECAPTCHA_SITE_KEY), isTokenAutoRefreshEnabled: true });
   const ai = getAI(aiApp, { backend: new GoogleAIBackend() });
   const cache = {};
   window.__aiReadCard = async (modelName, prompt, base64)=>{
