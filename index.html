@@ -534,7 +534,7 @@ tbody tr:nth-child(even){background:var(--row-alt);}
 <div class="modal-overlay" id="pwdOverlay">
   <div class="modal-box">
     <h3 style="margin:0 0 6px; font-size:16px;">تعيين كلمة مرور جديدة</h3>
-    <p style="font-size:13px; color:var(--ink-soft);">لأمان حسابك، اختر كلمة مرور خاصة فيك (8 خانات على الأقل) بدل الكلمة المؤقتة.</p>
+    <p style="font-size:13px; color:var(--ink-soft);">لأمان حسابك، اختر كلمة مرور خاصة فيك بدل الكلمة المؤقتة: 8 خانات على الأقل، فيها حرف إنجليزي صغير ورقم.</p>
     <div style="display:flex; flex-direction:column; gap:8px;">
       <input type="password" id="newPwd1" autocomplete="new-password" placeholder="كلمة المرور الجديدة">
       <input type="password" id="newPwd2" autocomplete="new-password" placeholder="تأكيد كلمة المرور">
@@ -1446,8 +1446,12 @@ function validNid(n){ return /^[12]\d{9}$/.test(n); }
 function nidEmail(nid, suffix){ return 'id' + nid + (suffix ? '.' + suffix : '') + '@' + ID_EMAIL_DOMAIN; }
 function genTempPwd(){
   const c = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
-  const a = new Uint32Array(10); crypto.getRandomValues(a);
-  return Array.from(a, x=> c[x % c.length]).join('');
+  let p = '';
+  do{
+    const a = new Uint32Array(10); crypto.getRandomValues(a);
+    p = Array.from(a, x=> c[x % c.length]).join('');
+  }while(!(/[a-z]/.test(p) && /[A-Z]/.test(p) && /[0-9]/.test(p)));
+  return p;
 }
 function maskNid(n){ return n ? '••••••' + String(n).slice(-4) : ''; }
 function plateText(v){ return [v.plateLet, v.plateNum].filter(Boolean).join(' ') || 'بدون لوحة'; }
@@ -1512,6 +1516,7 @@ function forcePasswordChange(user){
     document.getElementById('pwdSaveBtn').onclick = async ()=>{
       const a = document.getElementById('newPwd1').value, b = document.getElementById('newPwd2').value;
       if(a.length < 8){ err.textContent = 'كلمة المرور لازم 8 خانات على الأقل.'; return; }
+      if(!/[a-z]/.test(a) || !/[0-9]/.test(a)){ err.textContent = 'كلمة المرور لازم تحتوي حرف إنجليزي صغير (a-z) ورقم واحد على الأقل.'; return; }
       if(a !== b){ err.textContent = 'كلمتا المرور غير متطابقتين.'; return; }
       try{
         await user.updatePassword(a);
