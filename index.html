@@ -987,6 +987,7 @@ function explainAiError(err){
   const m = String(err && (err.message || err)).toLowerCase();
   if(m.includes('ai-not-loaded')) return 'محرك القراءة الذكية ما تحمّل (تحقق من الإنترنت وحدّث الصفحة).';
   if(/not enabled|has not been used|service_disabled|disabled/.test(m)) return 'القراءة الذكية غير مفعّلة في Firebase — فعّل AI Logic (Gemini Developer API).';
+  if(/app check|appcheck/.test(m)) return 'حماية App Check رفضت الطلب — تأكد من تسجيل الموقع في App Check بمفتاح reCAPTCHA.';
   if(/api key|api_key|referer|referrer/.test(m)) return 'مفتاح Firebase لا يسمح باستخدام القراءة الذكية من هذا الموقع.';
   if(/permission|forbidden|403/.test(m)) return 'لا توجد صلاحية لاستخدام القراءة الذكية في مشروع Firebase.';
   if(/quota|429|resource_exhausted/.test(m)) return 'تم تجاوز الحد المجاني المؤقت للقراءة الذكية، جرّب بعد دقيقة.';
@@ -1181,8 +1182,12 @@ auth.onAuthStateChanged(async user=>{
 // القراءة الذكية للاستمارة عبر Firebase AI Logic (Gemini Developer API)
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
 import { getAI, getGenerativeModel, GoogleAIBackend } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-ai.js";
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app-check.js";
+// مفتاح reCAPTCHA Enterprise / Fraud Defense العام (Site key) — يثبت أن الطلبات جاية من موقع النظام
+const RECAPTCHA_SITE_KEY = "6LdWy_wtAAAAAOAnSTnDKSXUMxMGq-mm1jnSOTTh";
 try{
   const aiApp = initializeApp(window.FIREBASE_CONFIG, 'card-reader');
+  if(RECAPTCHA_SITE_KEY) initializeAppCheck(aiApp, { provider: new ReCaptchaEnterpriseProvider(RECAPTCHA_SITE_KEY), isTokenAutoRefreshEnabled: true });
   const ai = getAI(aiApp, { backend: new GoogleAIBackend() });
   const cache = {};
   window.__aiReadCard = async (modelName, prompt, base64)=>{
